@@ -1,0 +1,1186 @@
+<title>OLIMPO — Documento Maestro</title>
+<style>
+/* ── Palette tokens (single dark theme — deliberate) ────────────── */
+:root {
+  --void:        #080808;
+  --ember-deep:  #1C0800;
+  --ember-surf:  #2A0E00;
+  --ember-border:#6B1800;
+  --red:         #D42000;
+  --orange:      #FF6030;
+  --highlight:   #FF9960;
+  --parchment:   #D4B89A;
+  --parch-dim:   #8A6A50;
+  --parch-mute:  #3D2A1A;
+  --code-bg:     #0E0600;
+  --mono: ui-monospace,'Cascadia Code','Fira Code','Consolas',monospace;
+  --sans: -apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 15px; scroll-behavior: smooth; }
+body {
+  font-family: var(--sans);
+  background: var(--void);
+  color: var(--parchment);
+  line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Hero ───────────────────────────────────────────────────────── */
+.hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 72px 24px 56px;
+  background: radial-gradient(ellipse 80% 60% at 50% 30%, #3A0A00 0%, var(--void) 70%);
+  border-bottom: 1px solid var(--ember-border);
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+.hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(212,32,0,.03) 2px,
+    rgba(212,32,0,.03) 4px
+  );
+  pointer-events: none;
+}
+.hero-logo {
+  font-family: var(--mono);
+  font-size: clamp(2.8rem, 8vw, 5.5rem);
+  font-weight: 900;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: var(--orange);
+  text-shadow:
+    0 0 8px  var(--red),
+    0 0 20px var(--orange),
+    0 0 50px var(--red),
+    0 0 90px rgba(212,32,0,.4);
+  line-height: 1;
+  margin-bottom: 12px;
+}
+.hero-sub {
+  font-family: var(--mono);
+  font-size: .72rem;
+  letter-spacing: .28em;
+  text-transform: uppercase;
+  color: var(--parch-dim);
+  margin-bottom: 28px;
+}
+.hero-desc {
+  max-width: 560px;
+  font-size: .9rem;
+  color: var(--parch-dim);
+  line-height: 1.7;
+}
+.hero-desc strong { color: var(--parchment); }
+
+/* ── Nav ────────────────────────────────────────────────────────── */
+.sitenav {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: rgba(8,8,8,.92);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--ember-border);
+  padding: 0 24px;
+  overflow-x: auto;
+  white-space: nowrap;
+  display: flex;
+  gap: 2px;
+  scrollbar-width: none;
+}
+.sitenav::-webkit-scrollbar { display: none; }
+.sitenav a {
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: .68rem;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--parch-dim);
+  text-decoration: none;
+  padding: 12px 14px;
+  border-bottom: 2px solid transparent;
+  transition: color .15s, border-color .15s;
+}
+.sitenav a:hover { color: var(--orange); border-bottom-color: var(--orange); }
+
+/* ── Wrap ───────────────────────────────────────────────────────── */
+.wrap { max-width: 900px; margin: 0 auto; padding: 0 24px 80px; }
+
+/* ── Section ────────────────────────────────────────────────────── */
+.section { margin-top: 60px; }
+.eyebrow {
+  font-family: var(--mono);
+  font-size: .62rem;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: var(--red);
+  margin-bottom: 6px;
+}
+.section-title {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--parchment);
+  text-wrap: balance;
+  margin-bottom: 10px;
+  line-height: 1.2;
+}
+.section-title .dim { color: var(--parch-dim); font-weight: 400; }
+.section-lead {
+  color: var(--parch-dim);
+  max-width: 680px;
+  margin-bottom: 24px;
+  font-size: .88rem;
+}
+
+hr.ember {
+  border: none;
+  border-top: 1px solid var(--ember-border);
+  margin: 56px 0 0;
+}
+
+/* ── Cards ──────────────────────────────────────────────────────── */
+.card {
+  background: var(--ember-deep);
+  border: 1px solid var(--ember-border);
+  border-radius: 6px;
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+.card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--ember-border);
+  background: var(--ember-surf);
+}
+.card-label {
+  font-family: var(--mono);
+  font-size: .72rem;
+  color: var(--parch-dim);
+  flex: 1;
+}
+.card-label span { color: var(--parchment); font-weight: 600; }
+.badge {
+  font-family: var(--mono);
+  font-size: .6rem;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 3px;
+}
+.badge-red    { background: rgba(212,32,0,.15); color: var(--red);     border: 1px solid rgba(212,32,0,.4); }
+.badge-orange { background: rgba(255,96,48,.1); color: var(--orange);  border: 1px solid rgba(255,96,48,.3); }
+.badge-dim    { background: var(--parch-mute);  color: var(--parch-dim); border: 1px solid var(--ember-border); }
+
+/* ── Code blocks ────────────────────────────────────────────────── */
+.code-block {
+  font-family: var(--mono);
+  font-size: .76rem;
+  line-height: 1.75;
+  padding: 16px;
+  background: var(--code-bg);
+  overflow-x: auto;
+  color: var(--parchment);
+  tab-size: 4;
+}
+.code-block .kw  { color: #FF6060; }
+.code-block .str { color: #FFB870; }
+.code-block .cmt { color: var(--parch-mute); font-style: italic; }
+.code-block .fn  { color: #FF9040; }
+.code-block .num { color: #FF7050; }
+.code-block .key { color: var(--highlight); }
+
+/* ── Method table ───────────────────────────────────────────────── */
+.method-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: .8rem;
+  margin-top: 4px;
+}
+.method-table th {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: .62rem;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--parch-dim);
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--ember-border);
+}
+.method-table td {
+  padding: 9px 12px;
+  border-bottom: 1px solid rgba(107,24,0,.3);
+  vertical-align: top;
+}
+.method-table tr:last-child td { border-bottom: none; }
+.method-table code {
+  font-family: var(--mono);
+  font-size: .73rem;
+  color: var(--orange);
+  background: var(--code-bg);
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+.method-table .ret {
+  font-family: var(--mono);
+  font-size: .7rem;
+  color: var(--highlight);
+}
+.note { font-size: .72rem; color: var(--parch-dim); margin-top: 3px; }
+
+/* ── Flow diagram ───────────────────────────────────────────────── */
+.flow {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  flex-wrap: wrap;
+  padding: 20px 16px;
+  background: var(--code-bg);
+  overflow-x: auto;
+}
+.flow-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 90px;
+}
+.flow-box {
+  background: var(--ember-surf);
+  border: 1px solid var(--ember-border);
+  border-radius: 4px;
+  padding: 8px 10px;
+  font-size: .7rem;
+  font-family: var(--mono);
+  text-align: center;
+  color: var(--parchment);
+  white-space: nowrap;
+}
+.flow-box.accent { border-color: var(--red); color: var(--orange); }
+.flow-label {
+  font-size: .6rem;
+  color: var(--parch-mute);
+  font-family: var(--mono);
+  letter-spacing: .04em;
+  text-align: center;
+}
+.flow-arrow {
+  font-size: 1rem;
+  color: var(--ember-border);
+  padding: 0 4px;
+  align-self: center;
+  flex-shrink: 0;
+  margin-bottom: 20px;
+}
+
+/* ── Stack grid ─────────────────────────────────────────────────── */
+.stack-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+  margin-top: 4px;
+}
+.stack-item {
+  background: var(--ember-deep);
+  border: 1px solid var(--ember-border);
+  border-radius: 6px;
+  padding: 14px 16px;
+}
+.stack-role {
+  font-family: var(--mono);
+  font-size: .6rem;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--red);
+  margin-bottom: 4px;
+}
+.stack-name {
+  font-size: .9rem;
+  font-weight: 700;
+  color: var(--parchment);
+  margin-bottom: 3px;
+}
+.stack-note { font-size: .73rem; color: var(--parch-dim); }
+
+/* ── Schema block ───────────────────────────────────────────────── */
+.schema-field {
+  display: flex;
+  gap: 12px;
+  padding: 6px 16px;
+  border-bottom: 1px solid rgba(107,24,0,.2);
+  font-size: .78rem;
+  font-family: var(--mono);
+}
+.schema-field:last-child { border-bottom: none; }
+.sf-name  { color: var(--orange); min-width: 140px; }
+.sf-type  { color: var(--highlight); min-width: 80px; }
+.sf-note  { color: var(--parch-dim); }
+
+/* ── Color palette ──────────────────────────────────────────────── */
+.palette {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 4px;
+}
+.swatch {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.swatch-color {
+  width: 80px;
+  height: 56px;
+  border-radius: 4px;
+  border: 1px solid rgba(255,255,255,.06);
+}
+.swatch-hex {
+  font-family: var(--mono);
+  font-size: .65rem;
+  color: var(--parch-dim);
+}
+.swatch-name {
+  font-family: var(--mono);
+  font-size: .62rem;
+  color: var(--parch-mute);
+  letter-spacing: .04em;
+}
+
+/* ── Checklist ──────────────────────────────────────────────────── */
+.checklist {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.checklist li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: .83rem;
+  padding: 10px 14px;
+  border-radius: 4px;
+  background: var(--ember-deep);
+  border: 1px solid var(--ember-border);
+  border-left: 3px solid;
+}
+.checklist li.todo   { border-left-color: var(--ember-border); }
+.checklist li.new    { border-left-color: var(--red); }
+.checklist li.done   { border-left-color: #2A6A30; opacity: .7; }
+.check-icon { flex-shrink: 0; font-family: var(--mono); font-size: .72rem; padding-top: 1px; }
+.check-icon.todo-i  { color: var(--parch-mute); }
+.check-icon.new-i   { color: var(--red); }
+.check-icon.done-i  { color: #4ade80; }
+
+/* ── Inline code ────────────────────────────────────────────────── */
+p code, li code, td code {
+  font-family: var(--mono);
+  font-size: .78em;
+  color: var(--orange);
+  background: var(--code-bg);
+  border: 1px solid var(--ember-border);
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+</style>
+
+<!-- ══════════════════════════════════════════════════════════════ -->
+
+<div class="hero">
+  <div class="hero-logo">OLIMPO</div>
+  <div class="hero-sub">APK DEV BY @MMxyzptlk04 &nbsp;·&nbsp; Documento Maestro v1.0</div>
+  <p class="hero-desc">
+    Plataforma cliente para servicios de verificación — <strong>correos temporales</strong> y <strong>números SMS virtuales</strong> — expuestos mediante interfaz web Streamlit con autenticación Telegram y empaquetados como APK Android.
+  </p>
+</div>
+
+<nav class="sitenav">
+  <a href="#overview">Overview</a>
+  <a href="#stack">Stack</a>
+  <a href="#auth">Auth</a>
+  <a href="#tempmail">TempMail</a>
+  <a href="#sms">SMS Pool</a>
+  <a href="#ui">UI / Colores</a>
+  <a href="#apk">APK</a>
+  <a href="#deploy">Deploy</a>
+  <a href="#checklist">Checklist</a>
+</nav>
+
+<div class="wrap">
+
+  <!-- ── 1. Overview ───────────────────────────────────────────── -->
+  <section class="section" id="overview">
+    <div class="eyebrow">Sección 1</div>
+    <h2 class="section-title">¿Qué es OLIMPO?</h2>
+    <p class="section-lead">OLIMPO es una interfaz cliente independiente que expone servicios de ALFA-1 sin modificar el bot original. Los módulos TempMail y SMSPool ya existen y funcionan — OLIMPO los conecta a una UI propia con acceso controlado.</p>
+
+    <div class="flow">
+      <div class="flow-step">
+        <div class="flow-box accent">Cliente</div>
+        <div class="flow-label">abre APK</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="flow-box">WebView</div>
+        <div class="flow-label">Android</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="flow-box accent">Streamlit</div>
+        <div class="flow-label">Railway HTTPS</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="flow-box">Auth Bot</div>
+        <div class="flow-label">Telegram OTP</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="flow-box accent">APIs</div>
+        <div class="flow-label">mail.tm · smspool.net</div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:20px;">
+      <div class="card-header">
+        <span class="card-label">Principios de diseño</span>
+      </div>
+      <div style="padding:16px;display:flex;flex-direction:column;gap:10px;font-size:.83rem;">
+        <div><strong style="color:var(--orange)">Independencia total de ALFA-1</strong> — OLIMPO no modifica ni depende del código del bot. Consume las mismas APIs externas directamente.</div>
+        <div><strong style="color:var(--orange)">Un bot dedicado para auth</strong> — Bot de Telegram exclusivo para enviar códigos OTP. No comparte instancia con ALFA-1.</div>
+        <div><strong style="color:var(--orange)">Streamlit como backend UI</strong> — Railway hostea el servidor Streamlit. El APK es solo un contenedor WebView sin lógica propia.</div>
+        <div><strong style="color:var(--orange)">Whitelist por Telegram ID</strong> — Solo IDs autorizados explícitamente pueden acceder. Sin registro público.</div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="ember">
+
+  <!-- ── 2. Stack ──────────────────────────────────────────────── -->
+  <section class="section" id="stack">
+    <div class="eyebrow">Sección 2</div>
+    <h2 class="section-title">Stack tecnológico</h2>
+    <div class="stack-grid">
+      <div class="stack-item">
+        <div class="stack-role">Frontend UI</div>
+        <div class="stack-name">Streamlit</div>
+        <div class="stack-note">Python puro, deploy directo en Railway</div>
+      </div>
+      <div class="stack-item">
+        <div class="stack-role">Autenticación</div>
+        <div class="stack-name">python-telegram-bot</div>
+        <div class="stack-note">Bot dedicado, solo envía OTPs</div>
+      </div>
+      <div class="stack-item">
+        <div class="stack-role">Correo temporal</div>
+        <div class="stack-name">mail.tm API</div>
+        <div class="stack-note">REST, Bearer token, async</div>
+      </div>
+      <div class="stack-item">
+        <div class="stack-role">SMS virtual</div>
+        <div class="stack-name">smspool.net API</div>
+        <div class="stack-note">REST, API key en env var</div>
+      </div>
+      <div class="stack-item">
+        <div class="stack-role">Persistencia</div>
+        <div class="stack-name">SQLite</div>
+        <div class="stack-note">BD propia, separada de ALFA-1</div>
+      </div>
+      <div class="stack-item">
+        <div class="stack-role">Infraestructura</div>
+        <div class="stack-name">Railway</div>
+        <div class="stack-note">Streamlit + bot auth en mismo proyecto</div>
+      </div>
+      <div class="stack-item">
+        <div class="stack-role">App Android</div>
+        <div class="stack-name">WebView APK</div>
+        <div class="stack-note">Kotlin mínimo, build via GitHub Actions</div>
+      </div>
+      <div class="stack-item">
+        <div class="stack-role">CI/CD</div>
+        <div class="stack-name">GitHub Actions</div>
+        <div class="stack-note">Genera APK firmado en cada release</div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:20px;">
+      <div class="card-header">
+        <span class="card-label">Variables de entorno requeridas</span>
+        <span class="badge badge-red">Obligatorias</span>
+      </div>
+      <div class="code-block">
+<span class="cmt"># Bot de autenticación OLIMPO (exclusivo, NO el de ALFA-1)</span>
+<span class="key">OLIMPO_BOT_TOKEN</span>=<span class="str">"7xxx:AAFxxx"</span>
+
+<span class="cmt"># IDs de Telegram autorizados (separados por coma)</span>
+<span class="key">OLIMPO_WHITELIST</span>=<span class="str">"123456789,987654321"</span>
+
+<span class="cmt"># SMSPool</span>
+<span class="key">SMSPOOL_API_KEY</span>=<span class="str">"tu_api_key"</span>
+
+<span class="cmt"># Secreto para firmar sesiones de Streamlit</span>
+<span class="key">OLIMPO_SESSION_SECRET</span>=<span class="str">"cadena_aleatoria_larga"</span></div>
+    </div>
+  </section>
+
+  <hr class="ember">
+
+  <!-- ── 3. Auth ───────────────────────────────────────────────── -->
+  <section class="section" id="auth">
+    <div class="eyebrow">Sección 3</div>
+    <h2 class="section-title">Sistema de autenticación</h2>
+    <p class="section-lead">Login con Telegram ID + OTP enviado por el bot dedicado de OLIMPO. Sin contraseñas. Sin registro público.</p>
+
+    <div class="card">
+      <div class="card-header">
+        <span class="card-label">Flujo completo de login</span>
+      </div>
+      <div class="flow" style="flex-direction:column;align-items:flex-start;gap:8px;">
+        <div style="display:flex;align-items:center;gap:10px;font-size:.78rem;font-family:var(--mono);">
+          <div class="flow-box accent" style="min-width:32px;text-align:center;">1</div>
+          <span>Usuario abre APK → WebView carga <code>https://olimpo.railway.app</code></span>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;font-size:.78rem;font-family:var(--mono);">
+          <div class="flow-box accent" style="min-width:32px;text-align:center;">2</div>
+          <span>Streamlit muestra campo: <strong>"Ingresa tu Telegram ID"</strong></span>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;font-size:.78rem;font-family:var(--mono);">
+          <div class="flow-box" style="min-width:32px;text-align:center;">3</div>
+          <span>Streamlit verifica ID en WHITELIST → si no está: <strong>acceso denegado</strong></span>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;font-size:.78rem;font-family:var(--mono);">
+          <div class="flow-box accent" style="min-width:32px;text-align:center;">4</div>
+          <span>Genera OTP de 6 dígitos → bot OLIMPO lo envía al Telegram del usuario</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;font-size:.78rem;font-family:var(--mono);">
+          <div class="flow-box" style="min-width:32px;text-align:center;">5</div>
+          <span>Usuario ingresa OTP en Streamlit → si coincide: sesión iniciada (60 min)</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;font-size:.78rem;font-family:var(--mono);">
+          <div class="flow-box accent" style="min-width:32px;text-align:center;">6</div>
+          <span>OTP expira en 5 minutos. Máximo 3 intentos por sesión.</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <span class="card-label">auth.py — estructura del módulo</span>
+        <span class="badge badge-dim">Nuevo archivo</span>
+      </div>
+      <div class="code-block"><span class="kw">import</span> secrets, time
+<span class="kw">from</span> telegram <span class="kw">import</span> Bot
+
+<span class="cmt"># OTPs activos: {tg_id: {code, expires_at, attempts}}</span>
+_pending: dict = {}
+
+<span class="kw">async def</span> <span class="fn">send_otp</span>(tg_id: int, bot: Bot) -> str:
+    code = str(secrets.randbelow(900000) + 100000)  <span class="cmt"># 6 dígitos</span>
+    _pending[tg_id] = {
+        <span class="str">"code"</span>: code,
+        <span class="str">"expires_at"</span>: time.time() + 300,  <span class="cmt"># 5 minutos</span>
+        <span class="str">"attempts"</span>: 0,
+    }
+    <span class="kw">await</span> bot.send_message(
+        chat_id=tg_id,
+        text=<span class="str">f"🔐 Tu código OLIMPO: <b>{code}</b>\nExpira en 5 minutos."</span>,
+        parse_mode=<span class="str">"HTML"</span>
+    )
+    <span class="kw">return</span> code
+
+<span class="kw">def</span> <span class="fn">verify_otp</span>(tg_id: int, entered: str) -> bool:
+    entry = _pending.get(tg_id)
+    <span class="kw">if not</span> entry: <span class="kw">return</span> <span class="kw">False</span>
+    entry[<span class="str">"attempts"</span>] += 1
+    <span class="kw">if</span> entry[<span class="str">"attempts"</span>] > 3:
+        _pending.pop(tg_id, <span class="kw">None</span>)
+        <span class="kw">return</span> <span class="kw">False</span>
+    <span class="kw">if</span> time.time() > entry[<span class="str">"expires_at"</span>]: <span class="kw">return</span> <span class="kw">False</span>
+    ok = entered.strip() == entry[<span class="str">"code"</span>]
+    <span class="kw">if</span> ok: _pending.pop(tg_id, <span class="kw">None</span>)
+    <span class="kw">return</span> ok
+
+<span class="kw">def</span> <span class="fn">is_whitelisted</span>(tg_id: int) -> bool:
+    <span class="kw">import</span> os
+    ids = [x.strip() <span class="kw">for</span> x <span class="kw">in</span> os.getenv(<span class="str">"OLIMPO_WHITELIST"</span>, <span class="str">""</span>).split(<span class="str">","</span>)]
+    <span class="kw">return</span> str(tg_id) <span class="kw">in</span> ids</div>
+    </div>
+  </section>
+
+  <hr class="ember">
+
+  <!-- ── 4. TempMail ───────────────────────────────────────────── -->
+  <section class="section" id="tempmail">
+    <div class="eyebrow">Sección 4 · Módulo</div>
+    <h2 class="section-title">TempMail <span class="dim">— mail.tm</span></h2>
+    <p class="section-lead">Correos temporales via <code>api.mail.tm</code>. Cada usuario tiene una cuenta activa con token JWT que se renueva automáticamente cada 55 minutos. También genera identidades mexicanas completas (CURP, NSS, datos personales).</p>
+
+    <div class="card">
+      <div class="card-header">
+        <span class="card-label">API base: <span>https://api.mail.tm</span></span>
+        <span class="badge badge-orange">REST · Bearer Token</span>
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="method-table">
+          <thead>
+            <tr>
+              <th>Método HTTP</th>
+              <th>Endpoint</th>
+              <th>Acción</th>
+              <th>Auth</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>GET</code></td>
+              <td><code>/domains</code></td>
+              <td>Listar dominios disponibles para crear cuenta</td>
+              <td>—</td>
+            </tr>
+            <tr>
+              <td><code>POST</code></td>
+              <td><code>/accounts</code></td>
+              <td>Crear cuenta de correo temporal</td>
+              <td>—</td>
+            </tr>
+            <tr>
+              <td><code>POST</code></td>
+              <td><code>/token</code></td>
+              <td>Obtener JWT para sesión</td>
+              <td>—</td>
+            </tr>
+            <tr>
+              <td><code>GET</code></td>
+              <td><code>/messages</code></td>
+              <td>Listar mensajes en bandeja</td>
+              <td>Bearer</td>
+            </tr>
+            <tr>
+              <td><code>GET</code></td>
+              <td><code>/messages/{id}</code></td>
+              <td>Leer mensaje completo (subject + body)</td>
+              <td>Bearer</td>
+            </tr>
+            <tr>
+              <td><code>DELETE</code></td>
+              <td><code>/messages/{id}</code></td>
+              <td>Eliminar mensaje</td>
+              <td>Bearer</td>
+            </tr>
+            <tr>
+              <td><code>DELETE</code></td>
+              <td><code>/accounts/{id}</code></td>
+              <td>Eliminar cuenta completa</td>
+              <td>Bearer</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <span class="card-label">Funciones a construir en OLIMPO</span>
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="method-table">
+          <thead>
+            <tr><th>Función</th><th>Retorna</th><th>Descripción</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>crear_cuenta(user_id)</code></td>
+              <td class="ret">dict</td>
+              <td>Crea cuenta en mail.tm, guarda email + password en SQLite
+                <div class="note">Usa dominio aleatorio de <code>GET /domains</code></div>
+              </td>
+            </tr>
+            <tr>
+              <td><code>get_token(user_id)</code></td>
+              <td class="ret">str</td>
+              <td>Devuelve JWT activo. Si tiene más de 55 min, renueva automáticamente</td>
+            </tr>
+            <tr>
+              <td><code>ver_bandeja(user_id)</code></td>
+              <td class="ret">list[dict]</td>
+              <td>Lista hasta 10 mensajes con subject, remitente y estado leído/no leído</td>
+            </tr>
+            <tr>
+              <td><code>leer_mensaje(user_id, msg_id)</code></td>
+              <td class="ret">dict</td>
+              <td>Cuerpo completo del mensaje. Trunca a 3000 chars si es muy largo</td>
+            </tr>
+            <tr>
+              <td><code>eliminar_mensaje(user_id, msg_id)</code></td>
+              <td class="ret">bool</td>
+              <td>Elimina mensaje de mail.tm</td>
+            </tr>
+            <tr>
+              <td><code>generar_identidad(user_id)</code></td>
+              <td class="ret">dict</td>
+              <td>Genera nombre, CURP, NSS, teléfono, dirección MX ficticios con Faker</td>
+            </tr>
+            <tr>
+              <td><code>eliminar_cuenta(user_id)</code></td>
+              <td class="ret">None</td>
+              <td>Borra cuenta en mail.tm y limpia registro en SQLite</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <span class="card-label">Schema SQLite — tabla <span>tempmail_cuentas</span></span>
+      </div>
+      <div class="schema-field"><span class="sf-name">user_id</span><span class="sf-type">INTEGER PK</span><span class="sf-note">Telegram ID del usuario</span></div>
+      <div class="schema-field"><span class="sf-name">email</span><span class="sf-type">TEXT</span><span class="sf-note">Dirección asignada por mail.tm</span></div>
+      <div class="schema-field"><span class="sf-name">password</span><span class="sf-type">TEXT</span><span class="sf-note">Generada con secrets.token_urlsafe(12)</span></div>
+      <div class="schema-field"><span class="sf-name">account_id</span><span class="sf-type">TEXT</span><span class="sf-note">ID interno de mail.tm para DELETE /accounts</span></div>
+      <div class="schema-field"><span class="sf-name">token</span><span class="sf-type">TEXT</span><span class="sf-note">JWT activo (puede ser NULL)</span></div>
+      <div class="schema-field"><span class="sf-name">token_at</span><span class="sf-type">TEXT</span><span class="sf-note">ISO timestamp de cuando se obtuvo el token</span></div>
+      <div class="schema-field"><span class="sf-name">created_at</span><span class="sf-type">TEXT</span><span class="sf-note">ISO UTC</span></div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <span class="card-label">Pantallas en Streamlit</span>
+      </div>
+      <div style="padding:14px 16px;font-size:.82rem;display:flex;flex-direction:column;gap:8px;">
+        <div><strong style="color:var(--orange)">Panel principal</strong> — Muestra correo activo o botón crear. Botones: Ver bandeja · Generar identidad · Eliminar cuenta.</div>
+        <div><strong style="color:var(--orange)">Bandeja</strong> — Lista de mensajes con indicador leído/no leído. Click en mensaje abre el cuerpo completo.</div>
+        <div><strong style="color:var(--orange)">Identidad</strong> — Tabla con nombre, CURP, NSS, teléfono, dirección. Botón regenerar.</div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="ember">
+
+  <!-- ── 5. SMSPool ────────────────────────────────────────────── -->
+  <section class="section" id="sms">
+    <div class="eyebrow">Sección 5 · Módulo</div>
+    <h2 class="section-title">SMS Pool <span class="dim">— smspool.net</span></h2>
+    <p class="section-lead">Números virtuales para recibir SMS de verificación. La API usa <code>SMSPOOL_API_KEY</code> en cada request. El polling busca el código cada 15 segundos hasta recibir status <code>3</code> (completado).</p>
+
+    <div class="card">
+      <div class="card-header">
+        <span class="card-label">API base: <span>https://api.smspool.net</span></span>
+        <span class="badge badge-orange">REST · API Key en body</span>
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="method-table">
+          <thead>
+            <tr><th>Endpoint</th><th>Params clave</th><th>Respuesta importante</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>GET /country/retrieve_all</code></td>
+              <td>—</td>
+              <td>Lista de países con ID y nombre</td>
+            </tr>
+            <tr>
+              <td><code>GET /service/retrieve_all</code></td>
+              <td>—</td>
+              <td>Lista de servicios (WhatsApp, Google, etc.)</td>
+            </tr>
+            <tr>
+              <td><code>POST /purchase/sms</code></td>
+              <td><code>country, service, apikey</code></td>
+              <td><code>order_id, number, expires_in</code></td>
+            </tr>
+            <tr>
+              <td><code>POST /sms/check</code></td>
+              <td><code>orderid, apikey</code></td>
+              <td><code>status</code> (1=pendiente, 3=recibido), <code>sms</code> (el código)</td>
+            </tr>
+            <tr>
+              <td><code>POST /sms/cancel</code></td>
+              <td><code>orderid, apikey</code></td>
+              <td>Cancela pedido y devuelve créditos en smspool</td>
+            </tr>
+            <tr>
+              <td><code>POST /request/balance</code></td>
+              <td><code>apikey</code></td>
+              <td>Saldo USD disponible en la cuenta smspool</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <span class="card-label">Status codes de <span>/sms/check</span></span>
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="method-table">
+          <thead><tr><th>Status</th><th>Significado</th><th>Acción</th></tr></thead>
+          <tbody>
+            <tr><td><code>1</code></td><td>Pendiente — SMS no ha llegado</td><td>Seguir polleando</td></tr>
+            <tr><td><code>3</code></td><td>Completado — SMS recibido</td><td>Leer campo <code>sms</code> (NO <code>code</code>)</td></tr>
+            <tr><td>otro</td><td>Error / expirado</td><td>Mostrar error, no reintentar</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div style="padding:10px 16px;">
+        <div class="badge badge-red" style="display:inline-block;margin-bottom:6px;">⚠ CRÍTICO</div>
+        <p style="font-size:.78rem;color:var(--parch-dim);">El código SMS llega en el campo <code style="color:var(--red)">sms</code> de la respuesta, <strong style="color:var(--parchment)">nunca</strong> en <code>code</code>. El campo <code>code</code> no existe en esta API.</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <span class="card-label">Funciones a construir en OLIMPO</span>
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="method-table">
+          <thead><tr><th>Función</th><th>Retorna</th><th>Descripción</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><code>listar_paises()</code></td>
+              <td class="ret">list[dict]</td>
+              <td>Cache 6h. Devuelve id + nombre de cada país</td>
+            </tr>
+            <tr>
+              <td><code>listar_servicios()</code></td>
+              <td class="ret">list[dict]</td>
+              <td>Cache 6h. Devuelve id + nombre de cada servicio</td>
+            </tr>
+            <tr>
+              <td><code>comprar_numero(country_id, service_id)</code></td>
+              <td class="ret">dict</td>
+              <td>Devuelve <code>order_id</code>, <code>number</code>, <code>expires_in</code></td>
+            </tr>
+            <tr>
+              <td><code>check_sms(order_id)</code></td>
+              <td class="ret">dict</td>
+              <td>Devuelve <code>status</code> y <code>sms</code> (el código). Leer <code>result["sms"]</code></td>
+            </tr>
+            <tr>
+              <td><code>cancelar(order_id)</code></td>
+              <td class="ret">bool</td>
+              <td>Cancela pedido activo</td>
+            </tr>
+            <tr>
+              <td><code>poll_hasta_codigo(order_id, timeout=90)</code></td>
+              <td class="ret">str | None</td>
+              <td>Loop cada 15s hasta recibir código o timeout. Devuelve el SMS o None</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <span class="card-label">Schema SQLite — tabla <span>olimpo_sms_orders</span></span>
+      </div>
+      <div class="schema-field"><span class="sf-name">id</span><span class="sf-type">INTEGER PK</span><span class="sf-note">Autoincrement</span></div>
+      <div class="schema-field"><span class="sf-name">user_id</span><span class="sf-type">INTEGER</span><span class="sf-note">Telegram ID</span></div>
+      <div class="schema-field"><span class="sf-name">order_id</span><span class="sf-type">TEXT UNIQUE</span><span class="sf-note">ID de smspool.net</span></div>
+      <div class="schema-field"><span class="sf-name">phone_number</span><span class="sf-type">TEXT</span><span class="sf-note">Número asignado</span></div>
+      <div class="schema-field"><span class="sf-name">service_name</span><span class="sf-type">TEXT</span><span class="sf-note">Ej: "WhatsApp"</span></div>
+      <div class="schema-field"><span class="sf-name">country_name</span><span class="sf-type">TEXT</span><span class="sf-note">Ej: "Mexico"</span></div>
+      <div class="schema-field"><span class="sf-name">sms_code</span><span class="sf-type">TEXT</span><span class="sf-note">Código recibido (NULL si no llegó)</span></div>
+      <div class="schema-field"><span class="sf-name">status</span><span class="sf-type">TEXT</span><span class="sf-note">pending · completed · cancelled · failed</span></div>
+      <div class="schema-field"><span class="sf-name">requested_at</span><span class="sf-type">TEXT</span><span class="sf-note">ISO UTC</span></div>
+      <div class="schema-field"><span class="sf-name">completed_at</span><span class="sf-type">TEXT</span><span class="sf-note">ISO UTC o NULL</span></div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <span class="card-label">Pantallas en Streamlit</span>
+      </div>
+      <div style="padding:14px 16px;font-size:.82rem;display:flex;flex-direction:column;gap:8px;">
+        <div><strong style="color:var(--orange)">Selector</strong> — Desplegables: país y servicio. Botón "Obtener número".</div>
+        <div><strong style="color:var(--orange)">Espera</strong> — Número asignado visible. Spinner con countdown. Botón cancelar.</div>
+        <div><strong style="color:var(--orange)">Resultado</strong> — Código SMS en grande. Botón copiar. Historial de pedidos del usuario.</div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="ember">
+
+  <!-- ── 6. UI / Colores ───────────────────────────────────────── -->
+  <section class="section" id="ui">
+    <div class="eyebrow">Sección 6</div>
+    <h2 class="section-title">Identidad visual OLIMPO</h2>
+    <p class="section-lead">Toda la navegación e interfaz debe seguir esta paleta. El banner define el tono: oscuro absoluto, rojo/naranja con brillo, tipografía monoespaciada estilo militar-retro.</p>
+
+    <div class="card">
+      <div class="card-header"><span class="card-label">Paleta de colores oficial</span></div>
+      <div style="padding:16px;">
+        <div class="palette">
+          <div class="swatch">
+            <div class="swatch-color" style="background:#080808;"></div>
+            <div class="swatch-hex">#080808</div>
+            <div class="swatch-name">void black</div>
+          </div>
+          <div class="swatch">
+            <div class="swatch-color" style="background:#1C0800;"></div>
+            <div class="swatch-hex">#1C0800</div>
+            <div class="swatch-name">ember deep</div>
+          </div>
+          <div class="swatch">
+            <div class="swatch-color" style="background:#6B1800;"></div>
+            <div class="swatch-hex">#6B1800</div>
+            <div class="swatch-name">crimson border</div>
+          </div>
+          <div class="swatch">
+            <div class="swatch-color" style="background:#D42000;"></div>
+            <div class="swatch-hex">#D42000</div>
+            <div class="swatch-name">olimpo red</div>
+          </div>
+          <div class="swatch">
+            <div class="swatch-color" style="background:#FF6030;"></div>
+            <div class="swatch-hex">#FF6030</div>
+            <div class="swatch-name">ember orange</div>
+          </div>
+          <div class="swatch">
+            <div class="swatch-color" style="background:#D4B89A;"></div>
+            <div class="swatch-hex">#D4B89A</div>
+            <div class="swatch-name">parchment text</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><span class="card-label">Reglas de interfaz</span></div>
+      <div style="padding:14px 16px;display:flex;flex-direction:column;gap:10px;font-size:.82rem;">
+        <div><strong style="color:var(--orange)">Fondo siempre oscuro</strong> — <code>#080808</code> como base. Nunca fondos blancos ni claros en ninguna pantalla.</div>
+        <div><strong style="color:var(--orange)">Texto principal</strong> — <code>#D4B89A</code> (parchment). Nunca blanco puro — el contraste con el negro es demasiado agresivo.</div>
+        <div><strong style="color:var(--orange)">Acciones primarias</strong> — botones con borde <code>#D42000</code>, fondo semi-transparente del mismo rojo. Texto <code>#FF6030</code>.</div>
+        <div><strong style="color:var(--orange)">Tipografía display</strong> — monoespaciada, mayúsculas, letter-spacing amplio. Para títulos y el nombre OLIMPO.</div>
+        <div><strong style="color:var(--orange)">Divisores</strong> — línea <code>1px solid #6B1800</code>. Nunca gris neutro.</div>
+        <div><strong style="color:var(--orange)">Códigos y datos</strong> — siempre en <code>font-family: monospace</code>, color <code>#FF6030</code>.</div>
+        <div><strong style="color:var(--orange)">Éxito</strong> — verde oscuro <code>#2A6A30</code>. Error — rojo <code>#D42000</code>. Nunca verde brillante ni rojo saturado.</div>
+        <div><strong style="color:var(--orange)">Sin bordes redondeados excesivos</strong> — máximo <code>border-radius: 6px</code>. Estética angular, no bubble.</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><span class="card-label">Streamlit — configuración de tema</span></div>
+      <div class="code-block"><span class="cmt"># .streamlit/config.toml</span>
+[theme]
+base = <span class="str">"dark"</span>
+backgroundColor      = <span class="str">"#080808"</span>
+secondaryBackgroundColor = <span class="str">"#1C0800"</span>
+primaryColor         = <span class="str">"#D42000"</span>
+textColor            = <span class="str">"#D4B89A"</span>
+font                 = <span class="str">"monospace"</span></div>
+    </div>
+  </section>
+
+  <hr class="ember">
+
+  <!-- ── 7. APK ────────────────────────────────────────────────── -->
+  <section class="section" id="apk">
+    <div class="eyebrow">Sección 7</div>
+    <h2 class="section-title">APK Android — WebView</h2>
+    <p class="section-lead">Contenedor mínimo en Kotlin. No tiene lógica propia — solo carga la URL de Railway en un WebView. GitHub Actions genera el APK firmado en cada push a <code>main</code>.</p>
+
+    <div class="card">
+      <div class="card-header">
+        <span class="card-label">MainActivity.kt — código completo</span>
+        <span class="badge badge-dim">~30 líneas</span>
+      </div>
+      <div class="code-block"><span class="kw">class</span> <span class="fn">MainActivity</span> : AppCompatActivity() {
+    <span class="kw">override fun</span> <span class="fn">onCreate</span>(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        <span class="kw">val</span> webView = WebView(this)
+        setContentView(webView)
+
+        webView.settings.apply {
+            javaScriptEnabled = <span class="kw">true</span>
+            domStorageEnabled = <span class="kw">true</span>
+            loadWithOverviewMode = <span class="kw">true</span>
+            useWideViewPort = <span class="kw">true</span>
+        }
+        webView.webViewClient = WebViewClient()
+        webView.loadUrl(<span class="str">"https://olimpo.up.railway.app"</span>)
+    }
+
+    <span class="cmt">// Manejar botón atrás dentro del WebView</span>
+    <span class="kw">override fun</span> <span class="fn">onBackPressed</span>() {
+        <span class="kw">if</span> (webView.canGoBack()) webView.goBack()
+        <span class="kw">else super</span>.onBackPressed()
+    }
+}</div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <span class="card-label">.github/workflows/build-apk.yml</span>
+        <span class="badge badge-dim">GitHub Actions</span>
+      </div>
+      <div class="code-block"><span class="key">name:</span> Build APK
+<span class="key">on:</span>
+  <span class="key">push:</span>
+    <span class="key">branches:</span> [main]
+
+<span class="key">jobs:</span>
+  <span class="key">build:</span>
+    <span class="key">runs-on:</span> ubuntu-latest
+    <span class="key">steps:</span>
+      - <span class="key">uses:</span> actions/checkout@v4
+      - <span class="key">uses:</span> actions/setup-java@v4
+        <span class="key">with:</span>
+          <span class="key">java-version:</span> <span class="str">'17'</span>
+          <span class="key">distribution:</span> <span class="str">'temurin'</span>
+      - <span class="key">name:</span> Build APK
+        <span class="key">run:</span> ./gradlew assembleRelease
+      - <span class="key">name:</span> Sign APK
+        <span class="key">uses:</span> r0adkll/sign-android-release@v1
+        <span class="key">with:</span>
+          <span class="key">releaseDirectory:</span> app/build/outputs/apk/release
+          <span class="key">signingKeyBase64:</span> <span class="str">${{ secrets.KEYSTORE_BASE64 }}</span>
+          <span class="key">alias:</span>             <span class="str">${{ secrets.KEY_ALIAS }}</span>
+          <span class="key">keyStorePassword:</span>  <span class="str">${{ secrets.KEYSTORE_PASSWORD }}</span>
+          <span class="key">keyPassword:</span>       <span class="str">${{ secrets.KEY_PASSWORD }}</span>
+      - <span class="key">uses:</span> actions/upload-artifact@v4
+        <span class="key">with:</span>
+          <span class="key">name:</span> olimpo-release.apk
+          <span class="key">path:</span> app/build/outputs/apk/release/*.apk</div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><span class="card-label">Secrets requeridos en el repo GitHub</span></div>
+      <div style="padding:14px 16px;font-size:.82rem;display:flex;flex-direction:column;gap:6px;">
+        <div><code>KEYSTORE_BASE64</code> — keystore en base64. Generar con: <code>keytool -genkey -v -keystore olimpo.jks</code></div>
+        <div><code>KEY_ALIAS</code> — alias elegido al crear el keystore</div>
+        <div><code>KEYSTORE_PASSWORD</code> — contraseña del keystore</div>
+        <div><code>KEY_PASSWORD</code> — contraseña de la clave</div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="ember">
+
+  <!-- ── 8. Deploy ─────────────────────────────────────────────── -->
+  <section class="section" id="deploy">
+    <div class="eyebrow">Sección 8</div>
+    <h2 class="section-title">Deploy en Railway</h2>
+    <div class="card">
+      <div class="card-header"><span class="card-label">Procfile</span></div>
+      <div class="code-block"><span class="key">web:</span> streamlit run app.py --server.port $PORT --server.address 0.0.0.0
+<span class="key">bot:</span> python bot_auth.py</div>
+    </div>
+    <div class="card">
+      <div class="card-header"><span class="card-label">Estructura de archivos del repo</span></div>
+      <div class="code-block">olimpo/
+├── app.py                  <span class="cmt"># Streamlit — punto de entrada UI</span>
+├── auth.py                 <span class="cmt"># OTP logic</span>
+├── bot_auth.py             <span class="cmt"># Bot Telegram dedicado</span>
+├── modules/
+│   ├── tempmail.py         <span class="cmt"># Wrapper mail.tm</span>
+│   └── smspool.py          <span class="cmt"># Wrapper smspool.net</span>
+├── db.py                   <span class="cmt"># SQLite — init schema</span>
+├── .streamlit/
+│   └── config.toml         <span class="cmt"># Tema OLIMPO</span>
+├── Procfile
+├── requirements.txt
+└── runtime.txt             <span class="cmt"># python-3.11.x</span></div>
+    </div>
+    <div class="card">
+      <div class="card-header"><span class="card-label">requirements.txt</span></div>
+      <div class="code-block">streamlit
+python-telegram-bot==20.*
+aiohttp
+faker
+</div>
+    </div>
+  </section>
+
+  <hr class="ember">
+
+  <!-- ── 9. Checklist ──────────────────────────────────────────── -->
+  <section class="section" id="checklist">
+    <div class="eyebrow">Sección 9</div>
+    <h2 class="section-title">Checklist de construcción</h2>
+    <p class="section-lead">En orden sugerido de implementación. Completar cada bloque antes de pasar al siguiente.</p>
+
+    <ul class="checklist">
+      <li class="new">
+        <span class="check-icon new-i">[ ]</span>
+        <span>Crear repo nuevo en GitHub para OLIMPO</span>
+      </li>
+      <li class="new">
+        <span class="check-icon new-i">[ ]</span>
+        <span>Crear bot en BotFather → guardar token como <code>OLIMPO_BOT_TOKEN</code></span>
+      </li>
+      <li class="new">
+        <span class="check-icon new-i">[ ]</span>
+        <span>Implementar <code>auth.py</code> — send_otp, verify_otp, is_whitelisted</span>
+      </li>
+      <li class="new">
+        <span class="check-icon new-i">[ ]</span>
+        <span>Implementar <code>bot_auth.py</code> — bot que solo responde y envía OTPs</span>
+      </li>
+      <li class="new">
+        <span class="check-icon new-i">[ ]</span>
+        <span>Implementar <code>db.py</code> — SQLite con tablas tempmail_cuentas y olimpo_sms_orders</span>
+      </li>
+      <li class="new">
+        <span class="check-icon new-i">[ ]</span>
+        <span>Implementar <code>modules/tempmail.py</code> — 7 funciones documentadas arriba</span>
+      </li>
+      <li class="new">
+        <span class="check-icon new-i">[ ]</span>
+        <span>Implementar <code>modules/smspool.py</code> — 6 funciones documentadas arriba</span>
+      </li>
+      <li class="new">
+        <span class="check-icon new-i">[ ]</span>
+        <span>Implementar <code>app.py</code> Streamlit con tema OLIMPO y pantalla de login</span>
+      </li>
+      <li class="new">
+        <span class="check-icon new-i">[ ]</span>
+        <span>Pantallas TempMail en Streamlit (panel, bandeja, identidad)</span>
+      </li>
+      <li class="new">
+        <span class="check-icon new-i">[ ]</span>
+        <span>Pantallas SMS Pool en Streamlit (selector, espera, resultado)</span>
+      </li>
+      <li class="new">
+        <span class="check-icon new-i">[ ]</span>
+        <span>Configurar proyecto en Railway — variables de entorno, Procfile</span>
+      </li>
+      <li class="new">
+        <span class="check-icon new-i">[ ]</span>
+        <span>Crear proyecto Android mínimo con WebView apuntando a la URL de Railway</span>
+      </li>
+      <li class="new">
+        <span class="check-icon new-i">[ ]</span>
+        <span>Generar keystore y agregar secrets en GitHub</span>
+      </li>
+      <li class="new">
+        <span class="check-icon new-i">[ ]</span>
+        <span>Agregar <code>.github/workflows/build-apk.yml</code> y verificar que genera APK</span>
+      </li>
+      <li class="new">
+        <span class="check-icon new-i">[ ]</span>
+        <span>Prueba end-to-end: login → tempmail → SMS en el APK instalado</span>
+      </li>
+    </ul>
+  </section>
+
+  <hr class="ember">
+  <p style="font-size:.68rem;color:var(--parch-mute);text-align:center;padding-top:20px;font-family:var(--mono);letter-spacing:.08em;">
+    OLIMPO · Documento Maestro v1.0 · Confidencial
+  </p>
+
+</div>
