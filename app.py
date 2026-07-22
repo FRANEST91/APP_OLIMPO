@@ -279,32 +279,17 @@ def _admin_screen(user_id: int) -> None:
 def _home_screen() -> None:
     st.markdown(
         """
-        <div style="text-align:center; padding: 32px 10px 16px;">
+        <div style="text-align:center; padding: 40px 10px 24px;">
           <div style="font-family: ui-monospace, 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
-                      font-weight:900; font-size:2.6rem; letter-spacing:.15em;
+                      font-weight:900; font-size:2.8rem; letter-spacing:.15em;
                       text-transform:uppercase; color:#FF6030; line-height:1;
                       text-shadow: 0 0 8px #D42000, 0 0 20px #FF6030, 0 0 50px rgba(212,32,0,.4);">
             OLIMPO
-          </div>
-          <div style="font-family: ui-monospace, monospace; font-size:.7rem; letter-spacing:.22em;
-                      text-transform:uppercase; color:#8A6A50; margin-top:10px;">
-            Correos temporales · Números SMS
           </div>
         </div>
         """,
         unsafe_allow_html=True,
     )
-    st.write("")
-    st.write("¿Qué querés usar hoy?")
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("📧 Correo temporal", use_container_width=True):
-            st.session_state["seccion"] = "TempMail"
-            st.rerun()
-    with col2:
-        if st.button("📱 Número SMS", use_container_width=True):
-            st.session_state["seccion"] = "SMS Pool"
-            st.rerun()
 
 
 def main() -> None:
