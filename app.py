@@ -63,7 +63,7 @@ def _login_screen() -> None:
                 return
             tg_id = int(tg_id_input.strip())
             if not auth.is_whitelisted(tg_id):
-                st.error("Acceso denegado. Este ID no está autorizado.")
+                st.error("Todavía no tienes acceso a Olimpo. Escríbele al bot para más info.")
                 return
             try:
                 _run(_send_otp(tg_id))
@@ -97,7 +97,7 @@ def _login_screen() -> None:
 
 
 def _tempmail_screen(user_id: int) -> None:
-    st.subheader("📧 TempMail")
+    st.subheader("📧 Correo temporal")
 
     with db.get_conn() as conn:
         row = conn.execute(
@@ -105,12 +105,12 @@ def _tempmail_screen(user_id: int) -> None:
         ).fetchone()
 
     if row is None:
-        st.write("No tienes una cuenta de correo temporal activa.")
-        if st.button("Crear cuenta"):
-            with _api_errors("No se pudo crear la cuenta"):
-                with st.spinner("Creando cuenta..."):
+        st.write("Todavía no tienes un correo temporal.")
+        if st.button("Crear correo"):
+            with _api_errors("No se pudo crear el correo"):
+                with st.spinner("Creando correo..."):
                     cuenta = tempmail.crear_cuenta(user_id)
-                st.success(f"Cuenta creada: {cuenta['email']}")
+                st.success(f"Listo: {cuenta['email']}")
                 st.rerun()
         return
 
@@ -153,14 +153,14 @@ def _tempmail_screen(user_id: int) -> None:
                 st.rerun()
 
     st.divider()
-    if st.button("Eliminar cuenta"):
-        with _api_errors("No se pudo eliminar la cuenta"):
+    if st.button("Borrar correo"):
+        with _api_errors("No se pudo borrar el correo"):
             tempmail.eliminar_cuenta(user_id)
             st.rerun()
 
 
 def _sms_screen(user_id: int) -> None:
-    st.subheader("📱 SMS Pool")
+    st.subheader("📱 Números SMS")
 
     order = st.session_state.get("sms_order")
 
@@ -226,7 +226,7 @@ def _sms_screen(user_id: int) -> None:
 
 
 def _admin_screen(user_id: int) -> None:
-    st.subheader("🛡️ Admin — Whitelist")
+    st.subheader("🛡️ Administrar accesos")
 
     with st.expander("Importar CSV"):
         st.caption("Columnas esperadas: tg_id, username (opcional), active (opcional)")
@@ -276,6 +276,37 @@ def _admin_screen(user_id: int) -> None:
                 st.rerun()
 
 
+def _home_screen() -> None:
+    st.markdown(
+        """
+        <div style="text-align:center; padding: 32px 10px 16px;">
+          <div style="font-family: ui-monospace, 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+                      font-weight:900; font-size:2.6rem; letter-spacing:.15em;
+                      text-transform:uppercase; color:#FF6030; line-height:1;
+                      text-shadow: 0 0 8px #D42000, 0 0 20px #FF6030, 0 0 50px rgba(212,32,0,.4);">
+            OLIMPO
+          </div>
+          <div style="font-family: ui-monospace, monospace; font-size:.7rem; letter-spacing:.22em;
+                      text-transform:uppercase; color:#8A6A50; margin-top:10px;">
+            Correos temporales · Números SMS
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.write("")
+    st.write("¿Qué querés usar hoy?")
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("📧 Correo temporal", use_container_width=True):
+            st.session_state["seccion"] = "TempMail"
+            st.rerun()
+    with col2:
+        if st.button("📱 Número SMS", use_container_width=True):
+            st.session_state["seccion"] = "SMS Pool"
+            st.rerun()
+
+
 def main() -> None:
     if not _logged_in():
         _login_screen()
@@ -284,15 +315,22 @@ def main() -> None:
     user_id = st.session_state["tg_id"]
 
     st.sidebar.markdown("## 🔥 OLIMPO")
-    opciones = ["TempMail", "SMS Pool"]
+    opciones = ["Inicio", "TempMail", "SMS Pool"]
     if auth.is_admin(user_id):
         opciones.append("Admin")
-    seccion = st.sidebar.radio("Navegación", opciones)
+
+    if "seccion" not in st.session_state:
+        st.session_state["seccion"] = "Inicio"
+
+    seccion = st.sidebar.radio("Navegación", opciones, key="seccion")
+
     if st.sidebar.button("Cerrar sesión"):
         st.session_state.clear()
         st.rerun()
 
-    if seccion == "TempMail":
+    if seccion == "Inicio":
+        _home_screen()
+    elif seccion == "TempMail":
         _tempmail_screen(user_id)
     elif seccion == "SMS Pool":
         _sms_screen(user_id)
