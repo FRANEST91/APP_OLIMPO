@@ -8,7 +8,7 @@ from telegram.constants import ParseMode
 
 from db import get_conn
 
-OTP_TTL_SECONDS = 300
+OTP_TTL_SECONDS = 60
 MAX_ATTEMPTS = 3
 
 # OTPs activos: {tg_id: {"code": str, "expires_at": float, "attempts": int}}
@@ -24,7 +24,7 @@ async def send_otp(tg_id: int, bot: Bot) -> str:
     }
     await bot.send_message(
         chat_id=tg_id,
-        text=f"🔐 Tu código: <code>{code}</code>\nVence en 5 minutos.",
+        text=f"🔐 Tu código: <code>{code}</code>\nVence en 1 minuto.",
         parse_mode=ParseMode.HTML,
     )
     return code

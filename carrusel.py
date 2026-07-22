@@ -39,6 +39,14 @@ def actualizar_orden(imagen_id: int, orden: int) -> None:
         conn.execute("UPDATE carrusel SET orden = ? WHERE id = ?", (orden, imagen_id))
 
 
+def actualizar_texto(imagen_id: int, texto_arriba: str | None, texto_abajo: str | None) -> None:
+    with get_conn() as conn:
+        conn.execute(
+            "UPDATE carrusel SET texto_arriba = ?, texto_abajo = ? WHERE id = ?",
+            (texto_arriba, texto_abajo, imagen_id),
+        )
+
+
 def toggle_activo(imagen_id: int, activo: bool) -> None:
     with get_conn() as conn:
         conn.execute("UPDATE carrusel SET active = ? WHERE id = ?", (1 if activo else 0, imagen_id))

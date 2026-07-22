@@ -1,6 +1,7 @@
 import asyncio
 import base64
 import csv
+import html
 import io
 import json
 import logging
@@ -16,7 +17,6 @@ from dotenv import load_dotenv
 load_dotenv()
 
 import streamlit as st
-import streamlit.components.v1 as components
 from telegram import Bot
 
 import auth
@@ -318,50 +318,78 @@ def _admin_screen(user_id: int) -> None:
     imagenes = carrusel.listar_imagenes(solo_activas=False)
     st.caption(f"{len(imagenes)} imagen(es) en el carrusel")
     for img in imagenes:
-        col1, col2, col3, col4, col5 = st.columns([2, 2, 1, 1, 1])
-        col1.image(bytes(img["contenido"]), width=80)
-        col2.text(img["nombre"])
-        nueva_dur = col3.number_input(
-            "seg", min_value=1, max_value=60,
-            value=img["duracion_ms"] // 1000, key=f"dur_{img['id']}",
-            label_visibility="collapsed",
-        )
-        if nueva_dur * 1000 != img["duracion_ms"]:
-            carrusel.actualizar_duracion(img["id"], int(nueva_dur * 1000))
-        accion_img = "Ocultar" if img["active"] else "Mostrar"
-        if col4.button(accion_img, key=f"toggle_img_{img['id']}"):
-            carrusel.toggle_activo(img["id"], not img["active"])
-            st.rerun()
-        if col5.button("🗑️", key=f"del_img_{img['id']}"):
-            carrusel.eliminar_imagen(img["id"])
-            st.rerun()
+        with st.container(border=True):
+            col_img, col_datos = st.columns([1, 3])
+            col_img.image(bytes(img["contenido"]), width=80)
+            with col_datos:
+                st.text(img["nombre"])
+                nueva_dur = st.number_input(
+                    "Segundos en pantalla", min_value=1, max_value=60,
+                    value=img["duracion_ms"] // 1000, key=f"dur_{img['id']}",
+                )
+                if nueva_dur * 1000 != img["duracion_ms"]:
+                    carrusel.actualizar_duracion(img["id"], int(nueva_dur * 1000))
+
+            nuevo_arriba = st.text_input(
+                "Texto arriba de la imagen", value=img["texto_arriba"] or "",
+                key=f"arriba_{img['id']}",
+            )
+            nuevo_abajo = st.text_input(
+                "Texto abajo de la imagen", value=img["texto_abajo"] or "",
+                key=f"abajo_{img['id']}",
+            )
+            if nuevo_arriba != (img["texto_arriba"] or "") or nuevo_abajo != (img["texto_abajo"] or ""):
+                carrusel.actualizar_texto(img["id"], nuevo_arriba or None, nuevo_abajo or None)
+
+            col_a, col_b = st.columns(2)
+            accion_img = "Ocultar" if img["active"] else "Mostrar"
+            if col_a.button(accion_img, key=f"toggle_img_{img['id']}", width="stretch"):
+                carrusel.toggle_activo(img["id"], not img["active"])
+                st.rerun()
+            if col_b.button("Eliminar", key=f"del_img_{img['id']}", width="stretch"):
+                carrusel.eliminar_imagen(img["id"])
+                st.rerun()
 
 
 def _carrusel_html(imagenes: list) -> str:
-    slides = []
+    slides_html = []
+    duraciones = []
     for img in imagenes:
         b64 = base64.b64encode(bytes(img["contenido"])).decode()
-        slides.append({
-            "src": f"data:{img['mime_type']};base64,{b64}",
-            "duracion": img["duracion_ms"],
-        })
-    slides_json = json.dumps(slides)
+        src = f"data:{img['mime_type']};base64,{b64}"
+        arriba = html.escape(img["texto_arriba"] or "")
+        abajo = html.escape(img["texto_abajo"] or "")
+        texto_estilo = (
+            "font-family:ui-monospace,monospace; font-size:.85rem; color:#D4B89A;"
+        )
+        slides_html.append(f"""
+        <div style="flex:0 0 100%; box-sizing:border-box; padding:0 6px; text-align:center;">
+          {f'<div style="{texto_estilo} margin-bottom:8px;">{arriba}</div>' if arriba else ''}
+          <img src="{src}" style="max-width:100%; max-height:240px; border-radius:8px; display:block; margin:0 auto;" />
+          {f'<div style="{texto_estilo} margin-top:8px;">{abajo}</div>' if abajo else ''}
+        </div>
+        """)
+        duraciones.append(img["duracion_ms"])
+
+    duraciones_json = json.dumps(duraciones)
     return f"""
-    <div style="width:100%; text-align:center;">
-      <img id="olimpo-slide" style="max-width:100%; max-height:280px; border-radius:8px;" />
+    <div style="overflow:hidden; width:100%;">
+      <div id="olimpo-track" style="display:flex; transition: transform .7s ease-in-out;">
+        {''.join(slides_html)}
+      </div>
     </div>
     <script>
-      const slides = {slides_json};
+      const duraciones = {duraciones_json};
       let idx = 0;
-      const imgEl = document.getElementById('olimpo-slide');
-      function mostrarSlide() {{
-        if (!slides.length) return;
-        imgEl.src = slides[idx].src;
-        const duracion = slides[idx].duracion || 4000;
-        idx = (idx + 1) % slides.length;
-        setTimeout(mostrarSlide, duracion);
+      const track = document.getElementById('olimpo-track');
+      function avanzar() {{
+        if (!duraciones.length) return;
+        track.style.transform = 'translateX(-' + (idx * 100) + '%)';
+        const espera = duraciones[idx] || 4000;
+        idx = (idx + 1) % duraciones.length;
+        setTimeout(avanzar, espera);
       }}
-      mostrarSlide();
+      avanzar();
     </script>
     """
 
@@ -369,7 +397,7 @@ def _carrusel_html(imagenes: list) -> str:
 def _home_screen() -> None:
     imagenes_carrusel = carrusel.listar_imagenes()
     if imagenes_carrusel:
-        components.html(_carrusel_html(imagenes_carrusel), height=300)
+        st.iframe(_carrusel_html(imagenes_carrusel), height=300)
     elif BANNER_PATH.exists():
         st.image(str(BANNER_PATH), width="stretch")
     st.markdown(
