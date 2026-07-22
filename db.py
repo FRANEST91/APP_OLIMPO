@@ -27,6 +27,14 @@ CREATE TABLE IF NOT EXISTS olimpo_sms_orders (
     requested_at  TEXT NOT NULL,
     completed_at  TEXT
 );
+
+CREATE TABLE IF NOT EXISTS whitelist (
+    tg_id      INTEGER PRIMARY KEY,
+    username   TEXT,
+    active     INTEGER NOT NULL DEFAULT 1,
+    added_by   INTEGER,
+    added_at   TEXT NOT NULL
+);
 """
 
 
