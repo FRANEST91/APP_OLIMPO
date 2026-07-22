@@ -6,7 +6,7 @@ import android.webkit.WebViewClient
 import androidx.activity.addCallback
 import androidx.appcompat.app.AppCompatActivity
 
-private const val OLIMPO_URL = "https://olimpo.up.railway.app"
+private const val OLIMPO_URL = "https://olimpoapk-production.up.railway.app"
 
 class MainActivity : AppCompatActivity() {
 
