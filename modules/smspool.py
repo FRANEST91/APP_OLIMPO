@@ -1,4 +1,5 @@
 import asyncio
+import json
 import os
 import time
 from datetime import datetime, timezone
@@ -36,15 +37,21 @@ def _cached(key: str):
 async def _get(path: str) -> dict:
     async with aiohttp.ClientSession() as session:
         async with session.get(f"{API_BASE}{path}") as resp:
-            resp.raise_for_status()
-            return await resp.json()
+            body = await resp.text()
+            if resp.status >= 400:
+                # El body suele traer el motivo real (saldo, parámetro
+                # inválido, etc.) que resp.raise_for_status() no muestra.
+                raise RuntimeError(f"smspool {path} devolvió {resp.status}: {body}")
+            return json.loads(body)
 
 
 async def _post(path: str, data: dict) -> dict:
     async with aiohttp.ClientSession() as session:
         async with session.post(f"{API_BASE}{path}", data=data) as resp:
-            resp.raise_for_status()
-            return await resp.json()
+            body = await resp.text()
+            if resp.status >= 400:
+                raise RuntimeError(f"smspool {path} devolvió {resp.status}: {body}")
+            return json.loads(body)
 
 
 def _normalizar_items(data) -> list:

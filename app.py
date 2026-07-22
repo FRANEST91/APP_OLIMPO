@@ -1,9 +1,11 @@
 import asyncio
 import csv
 import io
+import logging
 import os
 import time
 from contextlib import contextmanager
+from pathlib import Path
 
 from dotenv import load_dotenv
 
@@ -20,7 +22,11 @@ from modules import smspool, tempmail
 
 st.set_page_config(page_title="OLIMPO", page_icon="🔥", layout="centered")
 
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("olimpo.app")
+
 SESSION_TTL_SECONDS = 60 * 60
+BANNER_PATH = Path(__file__).parent / "assets" / "banner.jpg"
 
 db.init_db()
 
@@ -40,8 +46,9 @@ def _run(coro):
 def _api_errors(mensaje: str):
     try:
         yield
-    except Exception as exc:
-        st.error(f"{mensaje}: {exc}")
+    except Exception:
+        logger.exception(mensaje)
+        st.error(f"{mensaje}. Probá de nuevo en un momento.")
 
 
 def _logged_in() -> bool:
@@ -67,8 +74,9 @@ def _login_screen() -> None:
                 return
             try:
                 _run(_send_otp(tg_id))
-            except Exception as exc:
-                st.error(f"No se pudo enviar el código: {exc}")
+            except Exception:
+                logger.exception("No se pudo enviar el código OTP")
+                st.error("No pudimos enviarte el código. Probá de nuevo en un momento.")
                 return
             st.session_state["pending_tg_id"] = tg_id
             st.session_state["login_stage"] = "otp"
@@ -146,7 +154,8 @@ def _tempmail_screen(user_id: int) -> None:
         identidad = st.session_state.get("identidad")
         if identidad:
             for campo, valor in identidad.items():
-                st.text_input(campo.capitalize(), value=valor, disabled=True, key=f"id_{campo}")
+                st.caption(campo.capitalize())
+                st.code(valor, language=None)
         if st.button("Regenerar identidad"):
             with _api_errors("No se pudo generar la identidad"):
                 st.session_state["identidad"] = tempmail.generar_identidad(user_id)
@@ -183,7 +192,8 @@ def _sms_screen(user_id: int) -> None:
                 st.rerun()
         return
 
-    st.write(f"Número asignado: **{order['number']}**")
+    st.caption("Número asignado")
+    st.code(order["number"], language=None)
 
     if order.get("sms"):
         st.success("Código recibido")
@@ -228,28 +238,31 @@ def _sms_screen(user_id: int) -> None:
 def _admin_screen(user_id: int) -> None:
     st.subheader("🛡️ Administrar accesos")
 
-    with st.expander("Importar CSV"):
-        st.caption("Columnas esperadas: tg_id, username (opcional), active (opcional)")
-        archivo = st.file_uploader("Archivo CSV", type="csv", key="admin_csv")
-        if archivo is not None and st.button("Importar"):
-            with _api_errors("No se pudo importar el CSV"):
-                contenido = archivo.getvalue().decode("utf-8")
-                filas = list(csv.DictReader(io.StringIO(contenido)))
-                importados, omitidos = auth.import_csv(filas, user_id)
-                st.success(f"Importados: {importados} · Omitidos: {omitidos}")
+    st.markdown("**Importar CSV**")
+    st.caption("Columnas esperadas: tg_id, username (opcional), active (opcional)")
+    archivo = st.file_uploader("Archivo CSV", type="csv", key="admin_csv")
+    if archivo is not None and st.button("Importar"):
+        with _api_errors("No se pudo importar el CSV"):
+            contenido = archivo.getvalue().decode("utf-8")
+            filas = list(csv.DictReader(io.StringIO(contenido)))
+            importados, omitidos = auth.import_csv(filas, user_id)
+            st.success(f"Importados: {importados} · Omitidos: {omitidos}")
+            st.rerun()
+
+    st.divider()
+    st.markdown("**Agregar usuario manual**")
+    nuevo_id = st.text_input("Telegram ID", key="admin_new_id")
+    nuevo_username = st.text_input("Username (opcional)", key="admin_new_username")
+    if st.button("Agregar usuario"):
+        if not nuevo_id.strip().isdigit():
+            st.error("Ingresa un Telegram ID numérico válido.")
+        else:
+            with _api_errors("No se pudo agregar el usuario"):
+                auth.add_user(int(nuevo_id.strip()), nuevo_username.strip() or None, user_id)
+                st.success("Usuario agregado.")
                 st.rerun()
 
-    with st.expander("Agregar usuario manual"):
-        nuevo_id = st.text_input("Telegram ID", key="admin_new_id")
-        nuevo_username = st.text_input("Username (opcional)", key="admin_new_username")
-        if st.button("Agregar usuario"):
-            if not nuevo_id.strip().isdigit():
-                st.error("Ingresa un Telegram ID numérico válido.")
-            else:
-                with _api_errors("No se pudo agregar el usuario"):
-                    auth.add_user(int(nuevo_id.strip()), nuevo_username.strip() or None, user_id)
-                    st.success("Usuario agregado.")
-                    st.rerun()
+    st.divider()
 
     filtro = st.text_input("Buscar (ID o username)", key="admin_filter")
     usuarios = auth.list_users()
@@ -277,9 +290,11 @@ def _admin_screen(user_id: int) -> None:
 
 
 def _home_screen() -> None:
+    if BANNER_PATH.exists():
+        st.image(str(BANNER_PATH), width="stretch")
     st.markdown(
         """
-        <div style="text-align:center; padding: 40px 10px 24px;">
+        <div style="text-align:center; padding: 16px 10px 24px;">
           <div style="font-family: ui-monospace, 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
                       font-weight:900; font-size:2.8rem; letter-spacing:.15em;
                       text-transform:uppercase; color:#FF6030; line-height:1;
