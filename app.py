@@ -5,6 +5,12 @@ import os
 import time
 from contextlib import contextmanager
 
+from dotenv import load_dotenv
+
+# Debe cargarse antes de importar auth/db: leen variables de entorno al
+# importarse. En Railway no hace nada (no hay .env, ya vienen del entorno).
+load_dotenv()
+
 import streamlit as st
 from telegram import Bot
 

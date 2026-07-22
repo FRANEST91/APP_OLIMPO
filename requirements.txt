@@ -2,3 +2,4 @@ streamlit
 python-telegram-bot==20.*
 aiohttp
 faker
+python-dotenv
