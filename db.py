@@ -35,6 +35,17 @@ CREATE TABLE IF NOT EXISTS whitelist (
     added_by   INTEGER,
     added_at   TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS carrusel (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    nombre       TEXT NOT NULL,
+    contenido    BLOB NOT NULL,
+    mime_type    TEXT NOT NULL,
+    orden        INTEGER NOT NULL DEFAULT 0,
+    duracion_ms  INTEGER NOT NULL DEFAULT 4000,
+    active       INTEGER NOT NULL DEFAULT 1,
+    uploaded_at  TEXT NOT NULL
+);
 """
 
 

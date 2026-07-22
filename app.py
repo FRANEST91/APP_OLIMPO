@@ -1,6 +1,8 @@
 import asyncio
+import base64
 import csv
 import io
+import json
 import logging
 import os
 import time
@@ -14,9 +16,11 @@ from dotenv import load_dotenv
 load_dotenv()
 
 import streamlit as st
+import streamlit.components.v1 as components
 from telegram import Bot
 
 import auth
+import carrusel
 import db
 from modules import smspool, tempmail
 
@@ -48,7 +52,7 @@ def _api_errors(mensaje: str):
         yield
     except Exception:
         logger.exception(mensaje)
-        st.error(f"{mensaje}. Probá de nuevo en un momento.")
+        st.error(f"{mensaje}. Intenta de nuevo en un momento.")
 
 
 def _logged_in() -> bool:
@@ -76,7 +80,7 @@ def _login_screen() -> None:
                 _run(_send_otp(tg_id))
             except Exception:
                 logger.exception("No se pudo enviar el código OTP")
-                st.error("No pudimos enviarte el código. Probá de nuevo en un momento.")
+                st.error("No pudimos enviarte el código. Intenta de nuevo en un momento.")
                 return
             st.session_state["pending_tg_id"] = tg_id
             st.session_state["login_stage"] = "otp"
@@ -288,9 +292,85 @@ def _admin_screen(user_id: int) -> None:
                     auth.add_user(u["tg_id"], u["username"], user_id)
                 st.rerun()
 
+    st.divider()
+    st.markdown("**Banner rotativo (Inicio)**")
+    st.caption("Formatos: PNG, JPEG, GIF")
+
+    nuevas = st.file_uploader(
+        "Agregar imágenes",
+        type=["png", "jpg", "jpeg", "gif"],
+        accept_multiple_files=True,
+        key="admin_carrusel_upload",
+    )
+    duracion_seg = st.number_input(
+        "Segundos en pantalla (para las que agregues ahora)",
+        min_value=1, max_value=60, value=4, key="admin_carrusel_duracion",
+    )
+    if nuevas and st.button("Agregar al carrusel"):
+        with _api_errors("No se pudo agregar la imagen"):
+            for archivo in nuevas:
+                carrusel.agregar_imagen(
+                    archivo.name, archivo.getvalue(), archivo.type, int(duracion_seg * 1000)
+                )
+            st.success(f"{len(nuevas)} imagen(es) agregada(s).")
+            st.rerun()
+
+    imagenes = carrusel.listar_imagenes(solo_activas=False)
+    st.caption(f"{len(imagenes)} imagen(es) en el carrusel")
+    for img in imagenes:
+        col1, col2, col3, col4, col5 = st.columns([2, 2, 1, 1, 1])
+        col1.image(bytes(img["contenido"]), width=80)
+        col2.text(img["nombre"])
+        nueva_dur = col3.number_input(
+            "seg", min_value=1, max_value=60,
+            value=img["duracion_ms"] // 1000, key=f"dur_{img['id']}",
+            label_visibility="collapsed",
+        )
+        if nueva_dur * 1000 != img["duracion_ms"]:
+            carrusel.actualizar_duracion(img["id"], int(nueva_dur * 1000))
+        accion_img = "Ocultar" if img["active"] else "Mostrar"
+        if col4.button(accion_img, key=f"toggle_img_{img['id']}"):
+            carrusel.toggle_activo(img["id"], not img["active"])
+            st.rerun()
+        if col5.button("🗑️", key=f"del_img_{img['id']}"):
+            carrusel.eliminar_imagen(img["id"])
+            st.rerun()
+
+
+def _carrusel_html(imagenes: list) -> str:
+    slides = []
+    for img in imagenes:
+        b64 = base64.b64encode(bytes(img["contenido"])).decode()
+        slides.append({
+            "src": f"data:{img['mime_type']};base64,{b64}",
+            "duracion": img["duracion_ms"],
+        })
+    slides_json = json.dumps(slides)
+    return f"""
+    <div style="width:100%; text-align:center;">
+      <img id="olimpo-slide" style="max-width:100%; max-height:280px; border-radius:8px;" />
+    </div>
+    <script>
+      const slides = {slides_json};
+      let idx = 0;
+      const imgEl = document.getElementById('olimpo-slide');
+      function mostrarSlide() {{
+        if (!slides.length) return;
+        imgEl.src = slides[idx].src;
+        const duracion = slides[idx].duracion || 4000;
+        idx = (idx + 1) % slides.length;
+        setTimeout(mostrarSlide, duracion);
+      }}
+      mostrarSlide();
+    </script>
+    """
+
 
 def _home_screen() -> None:
-    if BANNER_PATH.exists():
+    imagenes_carrusel = carrusel.listar_imagenes()
+    if imagenes_carrusel:
+        components.html(_carrusel_html(imagenes_carrusel), height=300)
+    elif BANNER_PATH.exists():
         st.image(str(BANNER_PATH), width="stretch")
     st.markdown(
         """
@@ -314,28 +394,29 @@ def main() -> None:
 
     user_id = st.session_state["tg_id"]
 
-    st.sidebar.markdown("## 🔥 OLIMPO")
-    opciones = ["Inicio", "TempMail", "SMS Pool"]
+    col_titulo, col_salir = st.columns([4, 1])
+    with col_titulo:
+        st.markdown("## 🔥 OLIMPO")
+    with col_salir:
+        if st.button("Salir"):
+            st.session_state.clear()
+            st.rerun()
+
+    nombres = ["Inicio", "Correo temporal", "Números SMS"]
     if auth.is_admin(user_id):
-        opciones.append("Admin")
+        nombres.append("Admin")
 
-    if "seccion" not in st.session_state:
-        st.session_state["seccion"] = "Inicio"
+    tabs = st.tabs(nombres)
 
-    seccion = st.sidebar.radio("Navegación", opciones, key="seccion")
-
-    if st.sidebar.button("Cerrar sesión"):
-        st.session_state.clear()
-        st.rerun()
-
-    if seccion == "Inicio":
+    with tabs[0]:
         _home_screen()
-    elif seccion == "TempMail":
+    with tabs[1]:
         _tempmail_screen(user_id)
-    elif seccion == "SMS Pool":
+    with tabs[2]:
         _sms_screen(user_id)
-    else:
-        _admin_screen(user_id)
+    if auth.is_admin(user_id):
+        with tabs[3]:
+            _admin_screen(user_id)
 
 
 if __name__ == "__main__":
