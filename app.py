@@ -1,6 +1,7 @@
 import asyncio
 import os
 import time
+from contextlib import contextmanager
 
 import streamlit as st
 from telegram import Bot
@@ -16,12 +17,23 @@ SESSION_TTL_SECONDS = 60 * 60
 db.init_db()
 
 
-def _bot() -> Bot:
-    return Bot(token=os.environ["OLIMPO_BOT_TOKEN"])
+async def _send_otp(tg_id: int) -> None:
+    # Bot debe usarse como context manager: si no, el cliente HTTP interno
+    # nunca se cierra y cada login deja una conexión abierta (leak).
+    async with Bot(token=os.environ["OLIMPO_BOT_TOKEN"]) as bot:
+        await auth.send_otp(tg_id, bot)
 
 
 def _run(coro):
     return asyncio.run(coro)
+
+
+@contextmanager
+def _api_errors(mensaje: str):
+    try:
+        yield
+    except Exception as exc:
+        st.error(f"{mensaje}: {exc}")
 
 
 def _logged_in() -> bool:
@@ -46,7 +58,7 @@ def _login_screen() -> None:
                 st.error("Acceso denegado. Este ID no está autorizado.")
                 return
             try:
-                _run(auth.send_otp(tg_id, _bot()))
+                _run(_send_otp(tg_id))
             except Exception as exc:
                 st.error(f"No se pudo enviar el código: {exc}")
                 return
@@ -87,10 +99,11 @@ def _tempmail_screen(user_id: int) -> None:
     if row is None:
         st.write("No tienes una cuenta de correo temporal activa.")
         if st.button("Crear cuenta"):
-            with st.spinner("Creando cuenta..."):
-                cuenta = tempmail.crear_cuenta(user_id)
-            st.success(f"Cuenta creada: {cuenta['email']}")
-            st.rerun()
+            with _api_errors("No se pudo crear la cuenta"):
+                with st.spinner("Creando cuenta..."):
+                    cuenta = tempmail.crear_cuenta(user_id)
+                st.success(f"Cuenta creada: {cuenta['email']}")
+                st.rerun()
         return
 
     st.code(row["email"], language=None)
@@ -100,34 +113,42 @@ def _tempmail_screen(user_id: int) -> None:
     with tab_bandeja:
         if st.button("Actualizar bandeja"):
             st.rerun()
-        with st.spinner("Cargando mensajes..."):
-            mensajes = tempmail.ver_bandeja(user_id)
+        mensajes = []
+        with _api_errors("No se pudo cargar la bandeja"):
+            with st.spinner("Cargando mensajes..."):
+                mensajes = tempmail.ver_bandeja(user_id)
         if not mensajes:
             st.write("Bandeja vacía.")
         for m in mensajes:
             icono = "📨" if m["seen"] else "📩"
             with st.expander(f"{icono} {m['subject']} — {m['from']}"):
                 if st.button("Leer", key=f"leer_{m['id']}"):
-                    detalle = tempmail.leer_mensaje(user_id, m["id"])
-                    st.write(detalle["body"])
+                    with _api_errors("No se pudo leer el mensaje"):
+                        detalle = tempmail.leer_mensaje(user_id, m["id"])
+                        st.write(detalle["body"])
                 if st.button("Eliminar", key=f"del_{m['id']}"):
-                    tempmail.eliminar_mensaje(user_id, m["id"])
-                    st.rerun()
+                    with _api_errors("No se pudo eliminar el mensaje"):
+                        tempmail.eliminar_mensaje(user_id, m["id"])
+                        st.rerun()
 
     with tab_identidad:
         if "identidad" not in st.session_state:
-            st.session_state["identidad"] = tempmail.generar_identidad(user_id)
-        identidad = st.session_state["identidad"]
-        for campo, valor in identidad.items():
-            st.text_input(campo.capitalize(), value=valor, disabled=True, key=f"id_{campo}")
+            with _api_errors("No se pudo generar la identidad"):
+                st.session_state["identidad"] = tempmail.generar_identidad(user_id)
+        identidad = st.session_state.get("identidad")
+        if identidad:
+            for campo, valor in identidad.items():
+                st.text_input(campo.capitalize(), value=valor, disabled=True, key=f"id_{campo}")
         if st.button("Regenerar identidad"):
-            st.session_state["identidad"] = tempmail.generar_identidad(user_id)
-            st.rerun()
+            with _api_errors("No se pudo generar la identidad"):
+                st.session_state["identidad"] = tempmail.generar_identidad(user_id)
+                st.rerun()
 
     st.divider()
     if st.button("Eliminar cuenta"):
-        tempmail.eliminar_cuenta(user_id)
-        st.rerun()
+        with _api_errors("No se pudo eliminar la cuenta"):
+            tempmail.eliminar_cuenta(user_id)
+            st.rerun()
 
 
 def _sms_screen(user_id: int) -> None:
@@ -136,17 +157,22 @@ def _sms_screen(user_id: int) -> None:
     order = st.session_state.get("sms_order")
 
     if order is None:
-        paises = smspool.listar_paises()
-        servicios = smspool.listar_servicios()
+        paises, servicios = [], []
+        with _api_errors("No se pudieron cargar países/servicios"):
+            paises = smspool.listar_paises()
+            servicios = smspool.listar_servicios()
+        if not paises or not servicios:
+            return
 
         pais = st.selectbox("País", paises, format_func=lambda p: p["nombre"])
         servicio = st.selectbox("Servicio", servicios, format_func=lambda s: s["nombre"])
 
         if st.button("Obtener número", type="primary"):
-            with st.spinner("Comprando número..."):
-                nuevo_pedido = smspool.comprar_numero(user_id, pais["id"], servicio["id"])
-            st.session_state["sms_order"] = nuevo_pedido
-            st.rerun()
+            with _api_errors("No se pudo comprar el número"):
+                with st.spinner("Comprando número..."):
+                    nuevo_pedido = smspool.comprar_numero(user_id, pais["id"], servicio["id"])
+                st.session_state["sms_order"] = nuevo_pedido
+                st.rerun()
         return
 
     st.write(f"Número asignado: **{order['number']}**")
@@ -162,18 +188,20 @@ def _sms_screen(user_id: int) -> None:
     col1, col2 = st.columns(2)
     with col1:
         if st.button("Revisar código"):
-            resultado = smspool.check_sms(order["order_id"])
-            if str(resultado["status"]) == "3" and resultado["sms"]:
-                order["sms"] = resultado["sms"]
-                st.session_state["sms_order"] = order
-                st.rerun()
-            else:
-                st.info("Aún no llega el código. Sigue esperando.")
+            with _api_errors("No se pudo revisar el código"):
+                resultado = smspool.check_sms(order["order_id"])
+                if str(resultado["status"]) == "3" and resultado["sms"]:
+                    order["sms"] = resultado["sms"]
+                    st.session_state["sms_order"] = order
+                    st.rerun()
+                else:
+                    st.info("Aún no llega el código. Sigue esperando.")
     with col2:
         if st.button("Cancelar pedido"):
-            smspool.cancelar(order["order_id"])
-            st.session_state.pop("sms_order", None)
-            st.rerun()
+            with _api_errors("No se pudo cancelar el pedido"):
+                smspool.cancelar(order["order_id"])
+                st.session_state.pop("sms_order", None)
+                st.rerun()
 
     st.divider()
     st.caption("Historial de pedidos")
