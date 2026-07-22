@@ -1,0 +1,11 @@
+<resources>
+    <style name="Theme.Olimpo" parent="Theme.AppCompat.NoActionBar">
+        <item name="android:windowBackground">@color/void_black</item>
+        <item name="colorPrimary">@color/olimpo_red</item>
+        <item name="colorPrimaryDark">@color/ember_deep</item>
+        <item name="colorAccent">@color/ember_orange</item>
+        <item name="android:statusBarColor">@color/void_black</item>
+        <item name="android:navigationBarColor">@color/void_black</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>

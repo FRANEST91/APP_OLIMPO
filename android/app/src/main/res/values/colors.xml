@@ -1,0 +1,8 @@
+<resources>
+    <color name="void_black">#FF080808</color>
+    <color name="ember_deep">#FF1C0800</color>
+    <color name="crimson_border">#FF6B1800</color>
+    <color name="olimpo_red">#FFD42000</color>
+    <color name="ember_orange">#FFFF6030</color>
+    <color name="parchment">#FFD4B89A</color>
+</resources>
