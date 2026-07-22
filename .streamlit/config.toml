@@ -5,3 +5,7 @@ secondaryBackgroundColor = "#1C0800"
 primaryColor = "#D42000"
 textColor = "#D4B89A"
 font = "monospace"
+
+[client]
+# Oculta el menú de hamburguesa (Print, Rerun, "Made with Streamlit", etc.)
+toolbarMode = "minimal"

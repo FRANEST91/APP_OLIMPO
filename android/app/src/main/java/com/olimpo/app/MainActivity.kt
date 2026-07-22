@@ -8,6 +8,7 @@ import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.Toast
 import androidx.activity.addCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
@@ -57,18 +58,29 @@ class MainActivity : AppCompatActivity() {
                 callback: ValueCallback<Array<Uri>>,
                 params: FileChooserParams?
             ): Boolean {
+                // Toast temporal para diagnosticar: si nunca aparece al tocar
+                // "Elegir archivo", el problema es que esta función no se está
+                // llamando (no depende de createIntent/launch). Si aparece
+                // pero el selector no abre, el error queda en el segundo Toast.
+                Toast.makeText(this@MainActivity, "Abriendo selector de archivos…", Toast.LENGTH_SHORT).show()
+
                 filePathCallback?.onReceiveValue(null)
                 filePathCallback = callback
 
-                val intent = params?.createIntent() ?: Intent(Intent.ACTION_GET_CONTENT).apply {
-                    type = "*/*"
-                    addCategory(Intent.CATEGORY_OPENABLE)
-                }
                 return try {
+                    val intent = params?.createIntent() ?: Intent(Intent.ACTION_GET_CONTENT).apply {
+                        type = "*/*"
+                        addCategory(Intent.CATEGORY_OPENABLE)
+                    }
                     fileChooserLauncher.launch(intent)
                     true
                 } catch (e: Exception) {
                     filePathCallback = null
+                    Toast.makeText(
+                        this@MainActivity,
+                        "No se pudo abrir el selector: ${e.message}",
+                        Toast.LENGTH_LONG
+                    ).show()
                     false
                 }
             }
