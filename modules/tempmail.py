@@ -177,6 +177,18 @@ def eliminar_mensaje(user_id: int, msg_id: str) -> bool:
     return _run(_eliminar_mensaje(token, msg_id))
 
 
+MX_LADAS = ["55", "33", "81", "222", "442", "998", "664", "656"]
+
+
+def _telefono_mx() -> str:
+    # fake.phone_number() de Faker (es_MX) mete formatos tipo "x60118"
+    # que no existen en México. Se arma un número real de 10 dígitos.
+    lada = secrets.choice(MX_LADAS)
+    resto = "".join(secrets.choice("0123456789") for _ in range(10 - len(lada)))
+    mitad = len(resto) // 2
+    return f"+52 {lada} {resto[:mitad]} {resto[mitad:]}"
+
+
 def generar_identidad(user_id: int) -> dict:
     if Faker is None:
         raise RuntimeError("La librería 'faker' no está instalada")
@@ -193,7 +205,7 @@ def generar_identidad(user_id: int) -> dict:
         "nombre": fake.name(),
         "curp": curp,
         "nss": "".join(secrets.choice("0123456789") for _ in range(11)),
-        "telefono": fake.phone_number(),
+        "telefono": _telefono_mx(),
         "direccion": fake.address().replace("\n", ", "),
     }
 
