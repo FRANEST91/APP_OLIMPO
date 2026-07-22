@@ -61,10 +61,6 @@ async def _crear_cuenta(user_id: int) -> dict:
             INSERT INTO tempmail_cuentas
                 (user_id, email, password, account_id, token, token_at, created_at)
             VALUES (?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(user_id) DO UPDATE SET
-                email = excluded.email, password = excluded.password,
-                account_id = excluded.account_id, token = excluded.token,
-                token_at = excluded.token_at, created_at = excluded.created_at
             """,
             (user_id, email, password, account["id"], token_data["token"], now, now),
         )
@@ -73,6 +69,16 @@ async def _crear_cuenta(user_id: int) -> dict:
 
 
 def crear_cuenta(user_id: int) -> dict:
+    # Idempotente: si ya existe una cuenta, la devuelve en vez de crear otra
+    # en mail.tm (crear una segunda dejaría la primera huérfana y sin forma
+    # de borrarla, porque el schema solo guarda una cuenta por user_id).
+    existing = _cuenta_row(user_id)
+    if existing is not None:
+        return {
+            "email": existing["email"],
+            "account_id": existing["account_id"],
+            "created_at": existing["created_at"],
+        }
     return _run(_crear_cuenta(user_id))
 
 
