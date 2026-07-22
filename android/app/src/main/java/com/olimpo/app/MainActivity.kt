@@ -58,21 +58,29 @@ class MainActivity : AppCompatActivity() {
                 callback: ValueCallback<Array<Uri>>,
                 params: FileChooserParams?
             ): Boolean {
-                // Toast temporal para diagnosticar: si nunca aparece al tocar
-                // "Elegir archivo", el problema es que esta función no se está
-                // llamando (no depende de createIntent/launch). Si aparece
-                // pero el selector no abre, el error queda en el segundo Toast.
-                Toast.makeText(this@MainActivity, "Abriendo selector de archivos…", Toast.LENGTH_SHORT).show()
-
                 filePathCallback?.onReceiveValue(null)
                 filePathCallback = callback
 
-                return try {
-                    val intent = params?.createIntent() ?: Intent(Intent.ACTION_GET_CONTENT).apply {
-                        type = "*/*"
-                        addCategory(Intent.CATEGORY_OPENABLE)
+                // params.createIntent() arma un filtro MIME estricto a partir
+                // del accept="..." del <input>. Muchos gestores de archivos
+                // (y CSVs en particular) no reportan un MIME type que calce
+                // con ese filtro exacto, así que el archivo queda gris o
+                // directamente no aparece. Se usa "*/*" como tipo real (deja
+                // ver y elegir cualquier archivo) y los tipos originales solo
+                // como sugerencia vía EXTRA_MIME_TYPES, que la mayoría de los
+                // gestores tratan como filtro rápido opcional, no un bloqueo.
+                val intent = Intent(Intent.ACTION_GET_CONTENT).apply {
+                    type = "*/*"
+                    addCategory(Intent.CATEGORY_OPENABLE)
+                    putExtra(Intent.EXTRA_ALLOW_MULTIPLE, params?.mode == FileChooserParams.MODE_OPEN_MULTIPLE)
+                    val tipos = params?.acceptTypes?.filter { it.isNotBlank() }?.toTypedArray()
+                    if (!tipos.isNullOrEmpty()) {
+                        putExtra(Intent.EXTRA_MIME_TYPES, tipos)
                     }
-                    fileChooserLauncher.launch(intent)
+                }
+
+                return try {
+                    fileChooserLauncher.launch(Intent.createChooser(intent, "Elegir archivo"))
                     true
                 } catch (e: Exception) {
                     filePathCallback = null

@@ -37,14 +37,16 @@ CREATE TABLE IF NOT EXISTS whitelist (
 );
 
 CREATE TABLE IF NOT EXISTS carrusel (
-    id           INTEGER PRIMARY KEY AUTOINCREMENT,
-    nombre       TEXT NOT NULL,
-    contenido    BLOB NOT NULL,
-    mime_type    TEXT NOT NULL,
-    orden        INTEGER NOT NULL DEFAULT 0,
-    duracion_ms  INTEGER NOT NULL DEFAULT 4000,
-    active       INTEGER NOT NULL DEFAULT 1,
-    uploaded_at  TEXT NOT NULL
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    nombre        TEXT NOT NULL,
+    contenido     BLOB NOT NULL,
+    mime_type     TEXT NOT NULL,
+    orden         INTEGER NOT NULL DEFAULT 0,
+    duracion_ms   INTEGER NOT NULL DEFAULT 4000,
+    active        INTEGER NOT NULL DEFAULT 1,
+    uploaded_at   TEXT NOT NULL,
+    texto_arriba  TEXT,
+    texto_abajo   TEXT
 );
 """
 
@@ -60,6 +62,17 @@ def get_conn():
         conn.close()
 
 
+def _migrar(conn: sqlite3.Connection) -> None:
+    # CREATE TABLE IF NOT EXISTS no agrega columnas a una tabla que ya
+    # existía de un deploy anterior sin ellas — hay que sumarlas a mano.
+    columnas = {row["name"] for row in conn.execute("PRAGMA table_info(carrusel)")}
+    if "texto_arriba" not in columnas:
+        conn.execute("ALTER TABLE carrusel ADD COLUMN texto_arriba TEXT")
+    if "texto_abajo" not in columnas:
+        conn.execute("ALTER TABLE carrusel ADD COLUMN texto_abajo TEXT")
+
+
 def init_db() -> None:
     with get_conn() as conn:
         conn.executescript(SCHEMA)
+        _migrar(conn)
