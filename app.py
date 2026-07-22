@@ -1,4 +1,6 @@
 import asyncio
+import csv
+import io
 import os
 import time
 from contextlib import contextmanager
@@ -217,6 +219,57 @@ def _sms_screen(user_id: int) -> None:
         st.text(f"{h['service_name']} · {h['phone_number']} · {h['status']}")
 
 
+def _admin_screen(user_id: int) -> None:
+    st.subheader("🛡️ Admin — Whitelist")
+
+    with st.expander("Importar CSV"):
+        st.caption("Columnas esperadas: tg_id, username (opcional), active (opcional)")
+        archivo = st.file_uploader("Archivo CSV", type="csv", key="admin_csv")
+        if archivo is not None and st.button("Importar"):
+            with _api_errors("No se pudo importar el CSV"):
+                contenido = archivo.getvalue().decode("utf-8")
+                filas = list(csv.DictReader(io.StringIO(contenido)))
+                importados, omitidos = auth.import_csv(filas, user_id)
+                st.success(f"Importados: {importados} · Omitidos: {omitidos}")
+                st.rerun()
+
+    with st.expander("Agregar usuario manual"):
+        nuevo_id = st.text_input("Telegram ID", key="admin_new_id")
+        nuevo_username = st.text_input("Username (opcional)", key="admin_new_username")
+        if st.button("Agregar usuario"):
+            if not nuevo_id.strip().isdigit():
+                st.error("Ingresa un Telegram ID numérico válido.")
+            else:
+                with _api_errors("No se pudo agregar el usuario"):
+                    auth.add_user(int(nuevo_id.strip()), nuevo_username.strip() or None, user_id)
+                    st.success("Usuario agregado.")
+                    st.rerun()
+
+    filtro = st.text_input("Buscar (ID o username)", key="admin_filter")
+    usuarios = auth.list_users()
+    if filtro.strip():
+        f = filtro.strip().lower()
+        usuarios = [
+            u for u in usuarios
+            if f in str(u["tg_id"]) or f in (u["username"] or "").lower()
+        ]
+
+    st.caption(f"{len(usuarios)} usuario(s)")
+    for u in usuarios:
+        col1, col2, col3, col4 = st.columns([2, 2, 1, 1])
+        col1.text(str(u["tg_id"]))
+        col2.text(u["username"] or "—")
+        col3.text("✅" if u["active"] else "❌")
+        accion = "Eliminar" if u["active"] else "Reactivar"
+        if col4.button(accion, key=f"toggle_{u['tg_id']}"):
+            with _api_errors("No se pudo actualizar el usuario"):
+                if u["active"]:
+                    auth.remove_user(u["tg_id"])
+                else:
+                    auth.add_user(u["tg_id"], u["username"], user_id)
+                st.rerun()
+
+
 def main() -> None:
     if not _logged_in():
         _login_screen()
@@ -225,15 +278,20 @@ def main() -> None:
     user_id = st.session_state["tg_id"]
 
     st.sidebar.markdown("## 🔥 OLIMPO")
-    seccion = st.sidebar.radio("Navegación", ["TempMail", "SMS Pool"])
+    opciones = ["TempMail", "SMS Pool"]
+    if auth.is_admin(user_id):
+        opciones.append("Admin")
+    seccion = st.sidebar.radio("Navegación", opciones)
     if st.sidebar.button("Cerrar sesión"):
         st.session_state.clear()
         st.rerun()
 
     if seccion == "TempMail":
         _tempmail_screen(user_id)
-    else:
+    elif seccion == "SMS Pool":
         _sms_screen(user_id)
+    else:
+        _admin_screen(user_id)
 
 
 if __name__ == "__main__":
