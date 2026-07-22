@@ -16,9 +16,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     tg_id = update.effective_user.id
     await update.message.reply_html(
         "🔥 <b>OLIMPO</b>\n\n"
-        f"Tu Telegram ID es: <code>{tg_id}</code>\n\n"
-        "Pídele al administrador que lo agregue a la whitelist. Una vez "
-        "autorizado, ingresa este ID en la app para recibir tu código de acceso."
+        f"Tu ID: <code>{tg_id}</code>\n\n"
+        "¿Aún no tienes acceso a Olimpo? Pide informes con @MrMxyzptlk04 y @Chack0071."
     )
 
 

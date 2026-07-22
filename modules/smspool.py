@@ -47,12 +47,29 @@ async def _post(path: str, data: dict) -> dict:
             return await resp.json()
 
 
+def _normalizar_items(data) -> list:
+    # La API devuelve una lista de objetos (no un dict), y los nombres de
+    # campo varían entre endpoints/mayúsculas ("ID"/"id", "name"/"nombre").
+    items = []
+    if isinstance(data, dict):
+        data = data.get("data") or data.get("result") or []
+    for entry in data or []:
+        if not isinstance(entry, dict):
+            continue
+        item_id = entry.get("ID") or entry.get("id")
+        item_name = entry.get("name") or entry.get("nombre") or entry.get("country")
+        if item_id is None or item_name is None:
+            continue
+        items.append({"id": str(item_id), "nombre": item_name})
+    return items
+
+
 def listar_paises() -> list:
     cached = _cached("paises")
     if cached is not None:
         return cached
     data = _run(_get("/country/retrieve_all"))
-    paises = [{"id": pid, "nombre": nombre} for pid, nombre in data.items()]
+    paises = _normalizar_items(data)
     _cache["paises"] = (time.time(), paises)
     return paises
 
@@ -62,7 +79,7 @@ def listar_servicios() -> list:
     if cached is not None:
         return cached
     data = _run(_get("/service/retrieve_all"))
-    servicios = [{"id": sid, "nombre": nombre} for sid, nombre in data.items()]
+    servicios = _normalizar_items(data)
     _cache["servicios"] = (time.time(), servicios)
     return servicios
 

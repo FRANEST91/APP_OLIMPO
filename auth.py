@@ -24,7 +24,7 @@ async def send_otp(tg_id: int, bot: Bot) -> str:
     }
     await bot.send_message(
         chat_id=tg_id,
-        text=f"🔐 Tu código OLIMPO: <b>{code}</b>\nExpira en 5 minutos.",
+        text=f"🔐 Tu código: <code>{code}</code>\nVence en 5 minutos.",
         parse_mode=ParseMode.HTML,
     )
     return code
