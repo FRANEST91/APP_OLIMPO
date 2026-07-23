@@ -257,10 +257,23 @@ def _admin_screen(user_id: int) -> None:
     st.markdown("**Importar CSV**")
     st.caption("Columnas esperadas: tg_id, username (opcional), active (opcional)")
     archivo = st.file_uploader("Archivo CSV", type="csv", key="admin_csv")
-    if archivo is not None and st.button("Importar"):
+    if archivo is not None and st.button("Importar archivo"):
         with _api_errors("No se pudo importar el CSV"):
             contenido = archivo.getvalue().decode("utf-8")
             filas = list(csv.DictReader(io.StringIO(contenido)))
+            importados, omitidos = auth.import_csv(filas, user_id)
+            st.success(f"Importados: {importados} · Omitidos: {omitidos}")
+            st.rerun()
+
+    st.caption(
+        "¿El selector de archivos no te deja elegir el CSV? Abrilo con cualquier "
+        "app de texto, copiá todo el contenido (incluida la primera línea con "
+        "los nombres de columna) y pegalo acá abajo."
+    )
+    texto_csv = st.text_area("Pegar contenido del CSV", key="admin_csv_texto", height=150)
+    if texto_csv.strip() and st.button("Importar texto pegado"):
+        with _api_errors("No se pudo importar el CSV pegado"):
+            filas = list(csv.DictReader(io.StringIO(texto_csv)))
             importados, omitidos = auth.import_csv(filas, user_id)
             st.success(f"Importados: {importados} · Omitidos: {omitidos}")
             st.rerun()
