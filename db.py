@@ -70,6 +70,23 @@ CREATE TABLE IF NOT EXISTS creditos_movimientos (
     motivo      TEXT NOT NULL,
     created_at  TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS sdk_modulos (
+    module_id     TEXT PRIMARY KEY,
+    nombre        TEXT NOT NULL,
+    version       TEXT NOT NULL DEFAULT '?',
+    autor         TEXT NOT NULL DEFAULT '?',
+    origen        TEXT NOT NULL DEFAULT 'interno',
+    activo        INTEGER NOT NULL DEFAULT 1,
+    instalado_at  TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS sdk_modulo_config (
+    module_id  TEXT NOT NULL,
+    key        TEXT NOT NULL,
+    value      TEXT NOT NULL,
+    PRIMARY KEY (module_id, key)
+);
 """
 
 

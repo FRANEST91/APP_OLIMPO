@@ -24,7 +24,7 @@ import auth
 import carrusel
 import creditos
 import db
-from modules import smspool, tempmail
+import sdk
 
 st.set_page_config(page_title="OLIMPO", page_icon="🔥", layout="centered")
 
@@ -35,6 +35,7 @@ SESSION_TTL_SECONDS = 60 * 60
 BANNER_PATH = Path(__file__).parent / "assets" / "banner.jpg"
 
 db.init_db()
+sdk.descubrir_e_instalar()
 
 
 async def _send_otp(tg_id: int) -> None:
@@ -110,206 +111,75 @@ def _login_screen() -> None:
                 st.rerun()
 
 
-def _tempmail_screen(user_id: int) -> None:
-    st.subheader("📧 Correo temporal")
+def _modulos_admin_screen(user_id: int) -> None:
+    st.markdown("**Gestión de módulos**")
+    st.caption(
+        "Cada pestaña de usuario (aparte de Inicio y Admin) es un módulo. "
+        "Ver MODULOS.md para la guía de cómo construir uno nuevo."
+    )
 
-    with db.get_conn() as conn:
-        row = conn.execute(
-            "SELECT * FROM tempmail_cuentas WHERE user_id = ?", (user_id,)
-        ).fetchone()
-
-    if row is None:
-        st.write("Todavía no tienes un correo temporal.")
-        if st.button("Crear correo"):
-            with _api_errors("No se pudo crear el correo"):
-                with st.spinner("Creando correo..."):
-                    cuenta = tempmail.crear_cuenta(user_id)
-                st.success(f"Listo: {cuenta['email']}")
-                st.rerun()
-        return
-
-    st.code(row["email"], language=None)
-
-    tab_bandeja, tab_identidad = st.tabs(["Bandeja", "Identidad"])
-
-    with tab_bandeja:
-        if st.button("Actualizar bandeja"):
-            st.rerun()
-        mensajes = []
-        with _api_errors("No se pudo cargar la bandeja"):
-            with st.spinner("Cargando mensajes..."):
-                mensajes = tempmail.ver_bandeja(user_id)
-        if not mensajes:
-            st.write("Bandeja vacía.")
-        for m in mensajes:
-            icono = "📨" if m["seen"] else "📩"
-            with st.expander(f"{icono} {m['subject']} — {m['from']}"):
-                if st.button("Leer", key=f"leer_{m['id']}"):
-                    with _api_errors("No se pudo leer el mensaje"):
-                        detalle = tempmail.leer_mensaje(user_id, m["id"])
-                        st.write(detalle["body"])
-                if st.button("Eliminar", key=f"del_{m['id']}"):
-                    with _api_errors("No se pudo eliminar el mensaje"):
-                        tempmail.eliminar_mensaje(user_id, m["id"])
-                        st.rerun()
-
-    with tab_identidad:
-        if "identidad" not in st.session_state:
-            with _api_errors("No se pudo generar la identidad"):
-                st.session_state["identidad"] = tempmail.generar_identidad(user_id)
-        identidad = st.session_state.get("identidad")
-        if identidad:
-            for campo, valor in identidad.items():
-                st.caption(campo.capitalize())
-                st.code(valor, language=None)
-        if st.button("Regenerar identidad"):
-            with _api_errors("No se pudo generar la identidad"):
-                st.session_state["identidad"] = tempmail.generar_identidad(user_id)
-                st.rerun()
-
-    st.divider()
-    if st.button("Borrar correo"):
-        with _api_errors("No se pudo borrar el correo"):
-            tempmail.eliminar_cuenta(user_id)
-            st.rerun()
-
-
-def _sms_refund(user_id: int, credits: int, motivo: str) -> None:
-    if credits > 0:
-        creditos.asignar(user_id, credits, motivo)
-
-
-def _sms_screen(user_id: int) -> None:
-    st.subheader("📱 Números SMS")
-    st.caption(f"Tienes {creditos.saldo(user_id)} crédito(s)")
-
-    order = st.session_state.get("sms_order")
-
-    if order is None:
-        servicios = []
-        with _api_errors("No se pudo cargar la lista de servicios"):
-            servicios = smspool.listar_servicios()
-        if not servicios:
-            return
-
-        servicio = st.selectbox("Servicio", servicios, format_func=lambda s: s["nombre"])
-
-        paises = []
-        with _api_errors("No se pudieron cargar los países para este servicio"):
-            paises = smspool.listar_paises_servicio(servicio["id"])
-        if not paises:
-            st.info("Sin disponibilidad para este servicio por ahora.")
-            return
-
-        pais = st.selectbox(
-            "País", paises,
-            format_func=lambda p: f"{p['nombre']} — {p['creditos']} crédito(s)",
-        )
-        st.caption(f"Costo: {pais['creditos']} crédito(s)")
-
-        if st.button("Obtener número", type="primary"):
-            credits = pais["creditos"]
-            if creditos.saldo(user_id) < credits:
-                st.error("No tienes créditos suficientes. Pídele a un admin que te asigne más.")
-            elif not creditos.descontar(user_id, credits, f"Compra SMS: {servicio['nombre']} {pais['nombre']}"):
-                st.error("No tienes créditos suficientes. Pídele a un admin que te asigne más.")
-            else:
-                # Cobramos antes de llamar a la API: si SMSPool falla, se
-                # reembolsa de inmediato para no dejar créditos en el aire.
-                try:
-                    with st.spinner("Comprando número..."):
-                        compra = smspool.comprar_numero(pais["id"], servicio["id"])
-                    smspool.registrar_pedido(
-                        user_id, compra["order_id"], compra["number"],
-                        servicio["nombre"], pais["nombre"], credits, compra["expires_in"],
-                    )
-                except Exception as exc:
-                    _sms_refund(user_id, credits, f"Reembolso — error al comprar: {exc}")
-                    st.error(f"No se pudo comprar el número. Créditos devueltos. ({exc})")
-                    return
-
-                expires_at = (
-                    datetime.now(timezone.utc) + timedelta(seconds=compra["expires_in"])
-                ).isoformat()
-                st.session_state["sms_order"] = {
-                    "order_id": compra["order_id"],
-                    "number": compra["number"],
-                    "service_name": servicio["nombre"],
-                    "country_name": pais["nombre"],
-                    "credits": credits,
-                    "expires_at": expires_at,
-                    "cancel_deadline": time.time() + smspool.CANCEL_WINDOW_SECONDS,
-                    "sms": None,
-                }
-                st.rerun()
-        return
-
-    # Pedido expirado sin código: intento final y reembolso automático.
-    if not order.get("sms") and smspool.esta_expirado(order["expires_at"]):
-        resultado = {}
-        with _api_errors("No se pudo verificar el código"):
-            resultado = smspool.check_sms(order["order_id"])
-        if resultado.get("sms"):
-            order["sms"] = resultado["sms"]
-            st.session_state["sms_order"] = order
-        else:
-            smspool.marcar_fallido(order["order_id"])
-            _sms_refund(
-                user_id, order["credits"],
-                f"Reembolso — código no recibido a tiempo ({order['order_id']})",
-            )
-            st.session_state.pop("sms_order", None)
-            st.warning("El número expiró sin recibir código. Tus créditos fueron devueltos.")
-            st.rerun()
-            return
-
-    st.caption(f"{order['service_name']} · {order['country_name']}")
-    st.caption("Número asignado")
-    st.code(order["number"], language=None)
-
-    if order.get("sms"):
-        st.success("Código recibido")
-        st.code(order["sms"], language=None)
-        if st.button("Nuevo pedido"):
-            st.session_state.pop("sms_order", None)
-            st.rerun()
-        return
-
-    puede_cancelar = time.time() <= order.get("cancel_deadline", 0)
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("Revisar código"):
-            with _api_errors("No se pudo revisar el código"):
-                resultado = smspool.check_sms(order["order_id"])
-                if resultado.get("sms"):
-                    order["sms"] = resultado["sms"]
-                    st.session_state["sms_order"] = order
+    modulos = sdk.listar_modulos()
+    activos_cargados = {f["module_id"]: mo for f, mo in sdk.modulos_activos()}
+    for m in modulos:
+        with st.container(border=True):
+            col_info, col_origen, col_toggle = st.columns([3, 1, 1])
+            col_info.markdown(f"**{m['nombre']}** `{m['module_id']}` · v{m['version']} · {m['autor']}")
+            col_origen.caption("🌐 externo" if m["origen"] == "externo" else "📦 interno")
+            etiqueta = "Desactivar" if m["activo"] else "Activar"
+            if col_toggle.button(etiqueta, key=f"admin_mod_toggle_{m['module_id']}", width="stretch"):
+                with _api_errors("No se pudo actualizar el módulo"):
+                    if m["activo"]:
+                        sdk.desactivar(m["module_id"])
+                    else:
+                        sdk.activar(m["module_id"])
                     st.rerun()
-                else:
-                    st.info("Aún no llega el código. Sigue esperando.")
-    with col2:
-        if puede_cancelar and st.button("Cancelar pedido"):
-            with _api_errors("No se pudo cancelar el pedido"):
-                smspool.cancelar(order["order_id"])
-                _sms_refund(
-                    user_id, order["credits"],
-                    f"Reembolso — cancelación manual ({order['order_id']})",
-                )
-                st.session_state.pop("sms_order", None)
+
+            if m["origen"] == "externo":
+                col_a, col_b, col_c = st.columns(3)
+                if col_a.button("Hacer interno", key=f"admin_mod_internar_{m['module_id']}", width="stretch"):
+                    with _api_errors("No se pudo internar el módulo"):
+                        sdk.hacer_interno(m["module_id"])
+                        st.success(f"{m['nombre']} ahora es interno. Falta commitear modules/{m['module_id']}.py.")
+                        st.rerun()
+                if col_b.button("Recargar", key=f"admin_mod_recargar_{m['module_id']}", width="stretch"):
+                    sdk.recargar(m["module_id"])
+                    st.rerun()
+                if col_c.button("Eliminar", key=f"admin_mod_eliminar_{m['module_id']}", width="stretch"):
+                    with _api_errors("No se pudo eliminar el módulo"):
+                        sdk.eliminar(m["module_id"])
+                        st.rerun()
+            elif st.button("Recargar", key=f"admin_mod_recargar_{m['module_id']}"):
+                sdk.recargar(m["module_id"])
                 st.rerun()
 
+            mod = activos_cargados.get(m["module_id"])
+            render_admin = getattr(mod, "render_admin", None) if mod else None
+            if callable(render_admin):
+                with st.expander(f"Configuración de {m['nombre']}"):
+                    with _api_errors(f"Error en la configuración de {m['nombre']}"):
+                        render_admin(user_id)
+
     st.divider()
-    st.caption("Historial de pedidos")
-    with db.get_conn() as conn:
-        historial = conn.execute(
-            """
-            SELECT * FROM olimpo_sms_orders
-            WHERE user_id = ? ORDER BY requested_at DESC LIMIT 10
-            """,
-            (user_id,),
-        ).fetchall()
-    for h in historial:
-        st.text(f"{h['service_name']} · {h['phone_number']} · {h['status']}")
+    st.markdown("**Agregar módulo externo**")
+    st.caption(
+        "Subí un archivo .py que cumpla el contrato de MODULOS.md (MODULE_ID, "
+        "MODULE_NAME, render()). Se valida antes de activarlo — si falta algo "
+        "requerido, no se guarda nada."
+    )
+    archivo_mod = st.file_uploader("Archivo del módulo (.py)", type="py", key="admin_mod_upload")
+    id_sugerido = archivo_mod.name[:-3] if archivo_mod else ""
+    module_id_input = st.text_input(
+        "ID del módulo (minúsculas, sin espacios)", value=id_sugerido, key="admin_mod_id",
+    )
+    if archivo_mod is not None and st.button("Agregar módulo"):
+        module_id = module_id_input.strip().lower()
+        if not module_id or not module_id.replace("_", "").isalnum():
+            st.error("El ID del módulo debe ser alfanumérico (guiones bajos permitidos).")
+        else:
+            with _api_errors("No se pudo agregar el módulo"):
+                sdk.registrar_externo(module_id, archivo_mod.getvalue())
+                st.success(f"Módulo '{module_id}' agregado como externo.")
+                st.rerun()
 
 
 def _admin_screen(user_id: int) -> None:
@@ -379,28 +249,7 @@ def _admin_screen(user_id: int) -> None:
                 st.rerun()
 
     st.divider()
-    st.markdown("**Créditos (para Números SMS — el correo temporal es gratis)**")
-    st.caption(
-        "El costo por número se calcula automáticamente según el precio del país "
-        "en SMSPool: ≤$5 MXN → 10 cr · ≤$10 → 20 cr · ≤$15 → 30 cr · ≤$20 → 40 cr. "
-        "Países más caros no aparecen en el panel."
-    )
-    tasa_actual = smspool.get_config("usd_to_mxn", "18.5")
-    nueva_tasa = st.text_input("Tasa USD → MXN", value=tasa_actual, key="admin_tasa_mxn")
-    if st.button("Guardar tasa"):
-        try:
-            float(nueva_tasa)
-        except ValueError:
-            st.error("Ingresa un número válido para la tasa.")
-        else:
-            with db.get_conn() as conn:
-                conn.execute(
-                    "INSERT INTO smspool_config (key, value) VALUES ('usd_to_mxn', ?) "
-                    "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-                    (nueva_tasa.strip(),),
-                )
-            st.success("Tasa actualizada.")
-            st.rerun()
+    st.markdown("**Créditos (los cobra cada módulo según su propia lógica)**")
 
     col_cred_id, col_cred_cant = st.columns(2)
     cred_id = col_cred_id.text_input("Telegram ID", key="admin_cred_id")
@@ -477,6 +326,9 @@ def _admin_screen(user_id: int) -> None:
             if col_b.button("Eliminar", key=f"del_img_{img['id']}", width="stretch"):
                 carrusel.eliminar_imagen(img["id"])
                 st.rerun()
+
+    st.divider()
+    _modulos_admin_screen(user_id)
 
 
 def _carrusel_html(imagenes: list) -> str:
@@ -558,7 +410,9 @@ def main() -> None:
             st.session_state.clear()
             st.rerun()
 
-    nombres = ["Inicio", "Correo temporal", "Números SMS"]
+    modulos_activos = sdk.modulos_activos()
+
+    nombres = ["Inicio"] + [fila["nombre"] for fila, _mod in modulos_activos]
     if auth.is_admin(user_id):
         nombres.append("Admin")
 
@@ -566,12 +420,12 @@ def main() -> None:
 
     with tabs[0]:
         _home_screen()
-    with tabs[1]:
-        _tempmail_screen(user_id)
-    with tabs[2]:
-        _sms_screen(user_id)
+    for i, (fila, mod) in enumerate(modulos_activos, start=1):
+        with tabs[i]:
+            with _api_errors(f"Error en el módulo {fila['nombre']}"):
+                mod.render(user_id)
     if auth.is_admin(user_id):
-        with tabs[3]:
+        with tabs[-1]:
             _admin_screen(user_id)
 
 

@@ -3,13 +3,21 @@ import secrets
 from datetime import datetime, timezone
 
 import aiohttp
+import streamlit as st
 
+import sdk
 from db import get_conn
 
 try:
     from faker import Faker
 except ImportError:  # pragma: no cover
     Faker = None
+
+MODULE_ID = "tempmail"
+MODULE_NAME = "📧 Correo temporal"
+MODULE_VERSION = "1.0.0"
+MODULE_AUTHOR = "OLIMPO"
+MODULE_DATA_SCOPE = "per_user"  # una cuenta de correo por usuario
 
 API_BASE = "https://api.mail.tm"
 TOKEN_TTL_SECONDS = 55 * 60
@@ -226,3 +234,65 @@ def eliminar_cuenta(user_id: int) -> None:
     _run(_eliminar_cuenta(token, row["account_id"]))
     with get_conn() as conn:
         conn.execute("DELETE FROM tempmail_cuentas WHERE user_id = ?", (user_id,))
+
+
+def render(user_id: int) -> None:
+    st.subheader(MODULE_NAME)
+
+    row = _cuenta_row(user_id)
+
+    if row is None:
+        st.write("Todavía no tienes un correo temporal.")
+        if st.button("Crear correo", key=f"{MODULE_ID}_crear"):
+            with sdk.api_errors("No se pudo crear el correo"):
+                with st.spinner("Creando correo..."):
+                    cuenta = crear_cuenta(user_id)
+                st.success(f"Listo: {cuenta['email']}")
+                st.rerun()
+        return
+
+    st.code(row["email"], language=None)
+
+    tab_bandeja, tab_identidad = st.tabs(["Bandeja", "Identidad"])
+
+    with tab_bandeja:
+        if st.button("Actualizar bandeja", key=f"{MODULE_ID}_refrescar"):
+            st.rerun()
+        mensajes = []
+        with sdk.api_errors("No se pudo cargar la bandeja"):
+            with st.spinner("Cargando mensajes..."):
+                mensajes = ver_bandeja(user_id)
+        if not mensajes:
+            st.write("Bandeja vacía.")
+        for m in mensajes:
+            icono = "📨" if m["seen"] else "📩"
+            with st.expander(f"{icono} {m['subject']} — {m['from']}"):
+                if st.button("Leer", key=f"{MODULE_ID}_leer_{m['id']}"):
+                    with sdk.api_errors("No se pudo leer el mensaje"):
+                        detalle = leer_mensaje(user_id, m["id"])
+                        st.write(detalle["body"])
+                if st.button("Eliminar", key=f"{MODULE_ID}_del_{m['id']}"):
+                    with sdk.api_errors("No se pudo eliminar el mensaje"):
+                        eliminar_mensaje(user_id, m["id"])
+                        st.rerun()
+
+    with tab_identidad:
+        estado_key = f"{MODULE_ID}_identidad"
+        if estado_key not in st.session_state:
+            with sdk.api_errors("No se pudo generar la identidad"):
+                st.session_state[estado_key] = generar_identidad(user_id)
+        identidad = st.session_state.get(estado_key)
+        if identidad:
+            for campo, valor in identidad.items():
+                st.caption(campo.capitalize())
+                st.code(valor, language=None)
+        if st.button("Regenerar identidad", key=f"{MODULE_ID}_regenerar"):
+            with sdk.api_errors("No se pudo generar la identidad"):
+                st.session_state[estado_key] = generar_identidad(user_id)
+                st.rerun()
+
+    st.divider()
+    if st.button("Borrar correo", key=f"{MODULE_ID}_borrar"):
+        with sdk.api_errors("No se pudo borrar el correo"):
+            eliminar_cuenta(user_id)
+            st.rerun()
