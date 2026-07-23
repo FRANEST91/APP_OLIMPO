@@ -246,7 +246,57 @@ vos mismo y pasarla a la sesión de `aiohttp`).
 
 ---
 
-## 7. Cómo se gestiona un módulo (panel Admin)
+## 7. Notificaciones — Telegram y auditoría
+
+Además de mostrar cosas en la UI, tu módulo puede escribirle a un
+usuario puntual por Telegram, y dejar un rastro de auditoría para los
+admins. Los dos van por el bot de OLIMPO (`OLIMPO_BOT_TOKEN`), así que
+no necesitás manejar ningún token vos mismo.
+
+### DM a un usuario
+
+```python
+sdk.enviar_telegram(user_id, "📱 Tu número: <code>+52...</code>")
+```
+
+Úsalo para entregarle al usuario algo que no querés que dependa de que
+tenga la pestaña del navegador abierta: el número asignado, el costo
+cobrado, el código OTP cuando llega, la confirmación de un reembolso.
+Si el envío falla (por ejemplo, nunca le escribió al bot) no rompe tu
+módulo — se loguea y listo.
+
+### Alerta de auditoría (a los admins)
+
+```python
+sdk.alertar(
+    f"📱 SMS — nueva solicitud\n"
+    f"👤 {user_id}\n"
+    f"💳 {credits} crédito(s) cobrados\n"
+    f"🎫 {order_id}"
+)
+```
+
+Va a `OLIMPO_LOG_CHANNEL_ID` (un canal/grupo dedicado) si está
+configurado, o por DM a todos los admins (`OLIMPO_ADMINS`) si no hay
+canal. Es la prueba que evita discusiones más adelante — usala en
+**todo evento que mueva créditos o que alguien pueda después negar**:
+
+- Se cobró y se entregó un número → queda registrado qué se cobró y qué se entregó.
+- Se cobró pero la API externa nunca entregó nada → queda registrado el reembolso automático (protege al usuario: "sí me reembolsaron").
+- Llegó el código/resultado final → queda registrado con el dato real entregado (protege a OLIMPO: si el usuario dice "nunca me llegó" habiendo llegado, está el log).
+- Cancelación manual del usuario → queda registrado que fue el usuario quien canceló, no un error del módulo.
+
+`modules/smspool.py` implementa los cuatro casos (`_notificar_compra`,
+`_notificar_reembolso`, `_notificar_codigo`) — es la referencia a
+copiar para cualquier módulo que cobre créditos.
+
+También se usa para intentos de acceso fallidos a la app en sí (ver
+`app.py::_login_screen` — Telegram ID no autorizado, código OTP
+incorrecto), aunque eso no es parte de ningún módulo puntual.
+
+---
+
+## 8. Cómo se gestiona un módulo (panel Admin)
 
 Todo esto vive en **Admin > Gestión de módulos**:
 
@@ -271,7 +321,7 @@ Todo esto vive en **Admin > Gestión de módulos**:
 
 ---
 
-## 8. Checklist antes de subir tu módulo
+## 9. Checklist antes de subir tu módulo
 
 - [ ] `MODULE_ID` es único, en minúsculas, sin espacios.
 - [ ] `MODULE_NAME` empieza con un emoji (así se ve bien como pestaña).
@@ -283,6 +333,9 @@ Todo esto vive en **Admin > Gestión de módulos**:
 - [ ] Si cobrás créditos: usás `sdk.charge`/`sdk.refund`, nunca tocás
       `creditos.py` directo, y reembolsás en cualquier camino de fallo
       (error de API, cancelación del usuario, expiración).
+- [ ] Si cobrás créditos: cada cobro, reembolso y entrega de resultado
+      final pasa por `sdk.alertar(...)` — sin eso, un reclamo del
+      usuario no tiene forma de resolverse.
 - [ ] Si guardás datos: elegiste el patrón correcto de la sección 4 y
       creás tus tablas en `on_activar()` (no asumís que ya existen).
 - [ ] Si llamás una API externa: usás `sdk.http_get`/`sdk.http_post` (o

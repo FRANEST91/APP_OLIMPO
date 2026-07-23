@@ -257,6 +257,67 @@ def _refund(user_id: int, credits: int, motivo: str) -> None:
     sdk.refund(user_id, credits, motivo)
 
 
+def _notificar_compra(
+    user_id: int, order_id: str, number: str, service_name: str,
+    country_name: str, credits: int,
+) -> None:
+    sdk.enviar_telegram(
+        user_id,
+        f"📱 <b>Número asignado</b>\n"
+        f"{service_name} · {country_name}\n"
+        f"📞 Número: <code>{number}</code>\n"
+        f"💳 {credits} crédito(s) cobrados\n"
+        f"🎫 Ticket: <code>{order_id}</code>",
+    )
+    sdk.alertar(
+        f"📱 <b>SMS — nueva solicitud</b>\n"
+        f"👤 <code>{user_id}</code>\n"
+        f"🌐 {service_name} · {country_name}\n"
+        f"📞 {number}\n"
+        f"💳 {credits} crédito(s) cobrados\n"
+        f"🎫 <code>{order_id}</code>",
+    )
+
+
+def _notificar_reembolso(user_id: int, order_id: str, credits: int, motivo: str) -> None:
+    sdk.enviar_telegram(
+        user_id,
+        f"💳 <b>Reembolso automático</b>\n"
+        f"Se te devolvieron {credits} crédito(s).\n"
+        f"🎫 Ticket: <code>{order_id}</code>\n"
+        f"Motivo: {motivo}",
+    )
+    sdk.alertar(
+        f"📱 <b>SMS — reembolso</b>\n"
+        f"👤 <code>{user_id}</code>\n"
+        f"💳 {credits} crédito(s) devueltos\n"
+        f"🎫 <code>{order_id}</code>\n"
+        f"⚠️ {motivo}",
+    )
+
+
+def _notificar_codigo(
+    user_id: int, order_id: str, number: str, service_name: str,
+    country_name: str, code: str,
+) -> None:
+    sdk.enviar_telegram(
+        user_id,
+        f"✅ <b>¡Llegó tu código!</b>\n"
+        f"📞 Número: <code>{number}</code>\n"
+        f"🔑 Código: <code>{code}</code>\n"
+        f"🎫 Ticket: <code>{order_id}</code>",
+    )
+    # Queda el código real en el log de auditoría — es lo que resuelve un
+    # reclamo de "nunca me llegó" o de "no me cobren, no funcionó".
+    sdk.alertar(
+        f"📱 <b>SMS — código entregado</b>\n"
+        f"👤 <code>{user_id}</code>\n"
+        f"🌐 {service_name} · {country_name}\n"
+        f"🔑 Código entregado: <code>{code}</code>\n"
+        f"🎫 <code>{order_id}</code>",
+    )
+
+
 def render(user_id: int) -> None:
     st.subheader(MODULE_NAME)
     st.caption(f"Tienes {sdk.balance(user_id)} crédito(s)")
@@ -305,6 +366,12 @@ def render(user_id: int) -> None:
                     )
                 except Exception as exc:
                     _refund(user_id, credits, f"Reembolso — error al comprar: {exc}")
+                    sdk.alertar(
+                        f"📱 <b>SMS — reembolso</b> (error al comprar)\n"
+                        f"👤 <code>{user_id}</code>\n"
+                        f"💳 {credits} crédito(s) devueltos\n"
+                        f"⚠️ {exc}",
+                    )
                     st.error(f"No se pudo comprar el número. Créditos devueltos. ({exc})")
                     return
 
@@ -321,6 +388,10 @@ def render(user_id: int) -> None:
                     "cancel_deadline": time.time() + CANCEL_WINDOW_SECONDS,
                     "sms": None,
                 }
+                _notificar_compra(
+                    user_id, compra["order_id"], compra["number"],
+                    servicio["nombre"], pais["nombre"], credits,
+                )
                 st.rerun()
         return
 
@@ -332,12 +403,15 @@ def render(user_id: int) -> None:
         if resultado.get("sms"):
             order["sms"] = resultado["sms"]
             st.session_state[estado_key] = order
+            _notificar_codigo(
+                user_id, order["order_id"], order["number"],
+                order["service_name"], order["country_name"], order["sms"],
+            )
         else:
             marcar_fallido(order["order_id"])
-            _refund(
-                user_id, order["credits"],
-                f"Reembolso — código no recibido a tiempo ({order['order_id']})",
-            )
+            motivo = f"código no recibido a tiempo ({order['order_id']})"
+            _refund(user_id, order["credits"], f"Reembolso — {motivo}")
+            _notificar_reembolso(user_id, order["order_id"], order["credits"], motivo)
             st.session_state.pop(estado_key, None)
             st.warning("El número expiró sin recibir código. Tus créditos fueron devueltos.")
             st.rerun()
@@ -364,6 +438,10 @@ def render(user_id: int) -> None:
                 if resultado.get("sms"):
                     order["sms"] = resultado["sms"]
                     st.session_state[estado_key] = order
+                    _notificar_codigo(
+                        user_id, order["order_id"], order["number"],
+                        order["service_name"], order["country_name"], order["sms"],
+                    )
                     st.rerun()
                 else:
                     st.info("Aún no llega el código. Sigue esperando.")
@@ -371,9 +449,13 @@ def render(user_id: int) -> None:
         if puede_cancelar and st.button("Cancelar pedido", key=f"{MODULE_ID}_cancelar"):
             with sdk.api_errors("No se pudo cancelar el pedido"):
                 cancelar(order["order_id"])
-                _refund(
-                    user_id, order["credits"],
-                    f"Reembolso — cancelación manual ({order['order_id']})",
+                motivo = f"cancelación manual ({order['order_id']})"
+                _refund(user_id, order["credits"], f"Reembolso — {motivo}")
+                sdk.alertar(
+                    f"📱 <b>SMS — reembolso</b> (cancelación manual)\n"
+                    f"👤 <code>{user_id}</code>\n"
+                    f"💳 {order['credits']} crédito(s) devueltos\n"
+                    f"🎫 <code>{order['order_id']}</code>",
                 )
                 st.session_state.pop(estado_key, None)
                 st.rerun()

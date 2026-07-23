@@ -30,6 +30,11 @@ SMSPOOL_API_KEY=...
 carpeta del proyecto — una base local separada de la de Railway, para
 probar sin tocar producción ni a los usuarios reales.
 
+`OLIMPO_LOG_CHANNEL_ID` es opcional: el chat/canal donde llegan las
+alertas de auditoría (`sdk.alertar`, ver MODULOS.md) — cobros,
+reembolsos, entregas de código, accesos fallidos. Si no lo defines, las
+alertas se mandan por DM a todos los IDs en `OLIMPO_ADMINS`.
+
 ## 3. Correr la app
 
 ```bash

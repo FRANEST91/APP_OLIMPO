@@ -47,6 +47,15 @@ def verify_otp(tg_id: int, entered: str) -> bool:
     return ok
 
 
+def list_admin_ids() -> list[int]:
+    ids = []
+    for raw in os.getenv("OLIMPO_ADMINS", "").split(","):
+        raw = raw.strip()
+        if raw.lstrip("-").isdigit():
+            ids.append(int(raw))
+    return ids
+
+
 def is_admin(tg_id: int) -> bool:
     ids = [x.strip() for x in os.getenv("OLIMPO_ADMINS", "").split(",") if x.strip()]
     return str(tg_id) in ids
