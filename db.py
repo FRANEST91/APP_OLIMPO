@@ -48,6 +48,19 @@ CREATE TABLE IF NOT EXISTS carrusel (
     texto_arriba  TEXT,
     texto_abajo   TEXT
 );
+
+CREATE TABLE IF NOT EXISTS creditos (
+    user_id  INTEGER PRIMARY KEY,
+    saldo    INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS creditos_movimientos (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id     INTEGER NOT NULL,
+    delta       INTEGER NOT NULL,
+    motivo      TEXT NOT NULL,
+    created_at  TEXT NOT NULL
+);
 """
 
 

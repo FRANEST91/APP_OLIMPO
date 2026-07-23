@@ -21,6 +21,7 @@ from telegram import Bot
 
 import auth
 import carrusel
+import creditos
 import db
 from modules import smspool, tempmail
 
@@ -31,6 +32,9 @@ logger = logging.getLogger("olimpo.app")
 
 SESSION_TTL_SECONDS = 60 * 60
 BANNER_PATH = Path(__file__).parent / "assets" / "banner.jpg"
+# Créditos que cuesta comprar un número SMS. El correo temporal es gratis,
+# no consume créditos. Ajustable sin tocar código vía env var.
+SMS_COSTO_CREDITOS = int(os.getenv("OLIMPO_SMS_COSTO_CREDITOS", "1"))
 
 db.init_db()
 
@@ -174,6 +178,7 @@ def _tempmail_screen(user_id: int) -> None:
 
 def _sms_screen(user_id: int) -> None:
     st.subheader("📱 Números SMS")
+    st.caption(f"Tienes {creditos.saldo(user_id)} crédito(s)")
 
     order = st.session_state.get("sms_order")
 
@@ -187,13 +192,20 @@ def _sms_screen(user_id: int) -> None:
 
         pais = st.selectbox("País", paises, format_func=lambda p: p["nombre"])
         servicio = st.selectbox("Servicio", servicios, format_func=lambda s: s["nombre"])
+        st.caption(f"Costo: {SMS_COSTO_CREDITOS} crédito(s)")
 
         if st.button("Obtener número", type="primary"):
-            with _api_errors("No se pudo comprar el número"):
-                with st.spinner("Comprando número..."):
-                    nuevo_pedido = smspool.comprar_numero(user_id, pais["id"], servicio["id"])
-                st.session_state["sms_order"] = nuevo_pedido
-                st.rerun()
+            if creditos.saldo(user_id) < SMS_COSTO_CREDITOS:
+                st.error("No tienes créditos suficientes. Pídele a un admin que te asigne más.")
+            else:
+                with _api_errors("No se pudo comprar el número"):
+                    with st.spinner("Comprando número..."):
+                        nuevo_pedido = smspool.comprar_numero(user_id, pais["id"], servicio["id"])
+                    creditos.descontar(
+                        user_id, SMS_COSTO_CREDITOS, f"Compra SMS: {servicio['nombre']}"
+                    )
+                    st.session_state["sms_order"] = nuevo_pedido
+                    st.rerun()
         return
 
     st.caption("Número asignado")
@@ -291,6 +303,29 @@ def _admin_screen(user_id: int) -> None:
                 else:
                     auth.add_user(u["tg_id"], u["username"], user_id)
                 st.rerun()
+
+    st.divider()
+    st.markdown("**Créditos (para Números SMS — el correo temporal es gratis)**")
+    st.caption(f"Costo actual por número: {SMS_COSTO_CREDITOS} crédito(s). "
+               "Se ajusta con la variable de entorno OLIMPO_SMS_COSTO_CREDITOS.")
+
+    col_cred_id, col_cred_cant = st.columns(2)
+    cred_id = col_cred_id.text_input("Telegram ID", key="admin_cred_id")
+    cred_cant = col_cred_cant.number_input(
+        "Créditos a agregar", min_value=1, value=10, key="admin_cred_cant"
+    )
+    if st.button("Asignar créditos"):
+        if not cred_id.strip().isdigit():
+            st.error("Ingresa un Telegram ID numérico válido.")
+        else:
+            with _api_errors("No se pudieron asignar los créditos"):
+                creditos.asignar(int(cred_id.strip()), int(cred_cant))
+                st.success("Créditos asignados.")
+                st.rerun()
+
+    st.caption("Saldos actuales")
+    for row in creditos.listar_saldos():
+        st.text(f"{row['tg_id']} · {row['username'] or '—'} · {row['saldo']} créditos")
 
     st.divider()
     st.markdown("**Banner rotativo (Inicio)**")
