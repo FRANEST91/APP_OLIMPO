@@ -16,17 +16,26 @@ CREATE TABLE IF NOT EXISTS tempmail_cuentas (
 );
 
 CREATE TABLE IF NOT EXISTS olimpo_sms_orders (
-    id            INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id       INTEGER NOT NULL,
-    order_id      TEXT NOT NULL UNIQUE,
-    phone_number  TEXT NOT NULL,
-    service_name  TEXT NOT NULL,
-    country_name  TEXT NOT NULL,
-    sms_code      TEXT,
-    status        TEXT NOT NULL DEFAULT 'pending',
-    requested_at  TEXT NOT NULL,
-    completed_at  TEXT
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id          INTEGER NOT NULL,
+    order_id         TEXT NOT NULL UNIQUE,
+    phone_number     TEXT NOT NULL,
+    service_name     TEXT NOT NULL,
+    country_name     TEXT NOT NULL,
+    sms_code         TEXT,
+    status           TEXT NOT NULL DEFAULT 'pending',
+    requested_at     TEXT NOT NULL,
+    completed_at     TEXT,
+    credits_charged  INTEGER NOT NULL DEFAULT 0,
+    expires_at       TEXT
 );
+
+CREATE TABLE IF NOT EXISTS smspool_config (
+    key    TEXT PRIMARY KEY,
+    value  TEXT NOT NULL
+);
+
+INSERT OR IGNORE INTO smspool_config (key, value) VALUES ('usd_to_mxn', '18.5');
 
 CREATE TABLE IF NOT EXISTS whitelist (
     tg_id      INTEGER PRIMARY KEY,
@@ -83,6 +92,12 @@ def _migrar(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE carrusel ADD COLUMN texto_arriba TEXT")
     if "texto_abajo" not in columnas:
         conn.execute("ALTER TABLE carrusel ADD COLUMN texto_abajo TEXT")
+
+    columnas_sms = {row["name"] for row in conn.execute("PRAGMA table_info(olimpo_sms_orders)")}
+    if "credits_charged" not in columnas_sms:
+        conn.execute("ALTER TABLE olimpo_sms_orders ADD COLUMN credits_charged INTEGER NOT NULL DEFAULT 0")
+    if "expires_at" not in columnas_sms:
+        conn.execute("ALTER TABLE olimpo_sms_orders ADD COLUMN expires_at TEXT")
 
 
 def init_db() -> None:

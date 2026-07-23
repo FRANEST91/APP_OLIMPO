@@ -8,6 +8,7 @@ import logging
 import os
 import time
 from contextlib import contextmanager
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -32,9 +33,6 @@ logger = logging.getLogger("olimpo.app")
 
 SESSION_TTL_SECONDS = 60 * 60
 BANNER_PATH = Path(__file__).parent / "assets" / "banner.jpg"
-# Créditos que cuesta comprar un número SMS. El correo temporal es gratis,
-# no consume créditos. Ajustable sin tocar código vía env var.
-SMS_COSTO_CREDITOS = int(os.getenv("OLIMPO_SMS_COSTO_CREDITOS", "1"))
 
 db.init_db()
 
@@ -176,6 +174,11 @@ def _tempmail_screen(user_id: int) -> None:
             st.rerun()
 
 
+def _sms_refund(user_id: int, credits: int, motivo: str) -> None:
+    if credits > 0:
+        creditos.asignar(user_id, credits, motivo)
+
+
 def _sms_screen(user_id: int) -> None:
     st.subheader("📱 Números SMS")
     st.caption(f"Tienes {creditos.saldo(user_id)} crédito(s)")
@@ -183,31 +186,84 @@ def _sms_screen(user_id: int) -> None:
     order = st.session_state.get("sms_order")
 
     if order is None:
-        paises, servicios = [], []
-        with _api_errors("No se pudieron cargar países/servicios"):
-            paises = smspool.listar_paises()
+        servicios = []
+        with _api_errors("No se pudo cargar la lista de servicios"):
             servicios = smspool.listar_servicios()
-        if not paises or not servicios:
+        if not servicios:
             return
 
-        pais = st.selectbox("País", paises, format_func=lambda p: p["nombre"])
         servicio = st.selectbox("Servicio", servicios, format_func=lambda s: s["nombre"])
-        st.caption(f"Costo: {SMS_COSTO_CREDITOS} crédito(s)")
+
+        paises = []
+        with _api_errors("No se pudieron cargar los países para este servicio"):
+            paises = smspool.listar_paises_servicio(servicio["id"])
+        if not paises:
+            st.info("Sin disponibilidad para este servicio por ahora.")
+            return
+
+        pais = st.selectbox(
+            "País", paises,
+            format_func=lambda p: f"{p['nombre']} — {p['creditos']} crédito(s)",
+        )
+        st.caption(f"Costo: {pais['creditos']} crédito(s)")
 
         if st.button("Obtener número", type="primary"):
-            if creditos.saldo(user_id) < SMS_COSTO_CREDITOS:
+            credits = pais["creditos"]
+            if creditos.saldo(user_id) < credits:
+                st.error("No tienes créditos suficientes. Pídele a un admin que te asigne más.")
+            elif not creditos.descontar(user_id, credits, f"Compra SMS: {servicio['nombre']} {pais['nombre']}"):
                 st.error("No tienes créditos suficientes. Pídele a un admin que te asigne más.")
             else:
-                with _api_errors("No se pudo comprar el número"):
+                # Cobramos antes de llamar a la API: si SMSPool falla, se
+                # reembolsa de inmediato para no dejar créditos en el aire.
+                try:
                     with st.spinner("Comprando número..."):
-                        nuevo_pedido = smspool.comprar_numero(user_id, pais["id"], servicio["id"])
-                    creditos.descontar(
-                        user_id, SMS_COSTO_CREDITOS, f"Compra SMS: {servicio['nombre']}"
+                        compra = smspool.comprar_numero(pais["id"], servicio["id"])
+                    smspool.registrar_pedido(
+                        user_id, compra["order_id"], compra["number"],
+                        servicio["nombre"], pais["nombre"], credits, compra["expires_in"],
                     )
-                    st.session_state["sms_order"] = nuevo_pedido
-                    st.rerun()
+                except Exception as exc:
+                    _sms_refund(user_id, credits, f"Reembolso — error al comprar: {exc}")
+                    st.error(f"No se pudo comprar el número. Créditos devueltos. ({exc})")
+                    return
+
+                expires_at = (
+                    datetime.now(timezone.utc) + timedelta(seconds=compra["expires_in"])
+                ).isoformat()
+                st.session_state["sms_order"] = {
+                    "order_id": compra["order_id"],
+                    "number": compra["number"],
+                    "service_name": servicio["nombre"],
+                    "country_name": pais["nombre"],
+                    "credits": credits,
+                    "expires_at": expires_at,
+                    "cancel_deadline": time.time() + smspool.CANCEL_WINDOW_SECONDS,
+                    "sms": None,
+                }
+                st.rerun()
         return
 
+    # Pedido expirado sin código: intento final y reembolso automático.
+    if not order.get("sms") and smspool.esta_expirado(order["expires_at"]):
+        resultado = {}
+        with _api_errors("No se pudo verificar el código"):
+            resultado = smspool.check_sms(order["order_id"])
+        if resultado.get("sms"):
+            order["sms"] = resultado["sms"]
+            st.session_state["sms_order"] = order
+        else:
+            smspool.marcar_fallido(order["order_id"])
+            _sms_refund(
+                user_id, order["credits"],
+                f"Reembolso — código no recibido a tiempo ({order['order_id']})",
+            )
+            st.session_state.pop("sms_order", None)
+            st.warning("El número expiró sin recibir código. Tus créditos fueron devueltos.")
+            st.rerun()
+            return
+
+    st.caption(f"{order['service_name']} · {order['country_name']}")
     st.caption("Número asignado")
     st.code(order["number"], language=None)
 
@@ -219,21 +275,26 @@ def _sms_screen(user_id: int) -> None:
             st.rerun()
         return
 
+    puede_cancelar = time.time() <= order.get("cancel_deadline", 0)
     col1, col2 = st.columns(2)
     with col1:
         if st.button("Revisar código"):
             with _api_errors("No se pudo revisar el código"):
                 resultado = smspool.check_sms(order["order_id"])
-                if str(resultado["status"]) == "3" and resultado["sms"]:
+                if resultado.get("sms"):
                     order["sms"] = resultado["sms"]
                     st.session_state["sms_order"] = order
                     st.rerun()
                 else:
                     st.info("Aún no llega el código. Sigue esperando.")
     with col2:
-        if st.button("Cancelar pedido"):
+        if puede_cancelar and st.button("Cancelar pedido"):
             with _api_errors("No se pudo cancelar el pedido"):
                 smspool.cancelar(order["order_id"])
+                _sms_refund(
+                    user_id, order["credits"],
+                    f"Reembolso — cancelación manual ({order['order_id']})",
+                )
                 st.session_state.pop("sms_order", None)
                 st.rerun()
 
@@ -257,10 +318,23 @@ def _admin_screen(user_id: int) -> None:
     st.markdown("**Importar CSV**")
     st.caption("Columnas esperadas: tg_id, username (opcional), active (opcional)")
     archivo = st.file_uploader("Archivo CSV", type="csv", key="admin_csv")
-    if archivo is not None and st.button("Importar"):
+    if archivo is not None and st.button("Importar archivo"):
         with _api_errors("No se pudo importar el CSV"):
             contenido = archivo.getvalue().decode("utf-8")
             filas = list(csv.DictReader(io.StringIO(contenido)))
+            importados, omitidos = auth.import_csv(filas, user_id)
+            st.success(f"Importados: {importados} · Omitidos: {omitidos}")
+            st.rerun()
+
+    st.caption(
+        "¿El selector de archivos no te deja elegir el CSV? Abrilo con cualquier "
+        "app de texto, copiá todo el contenido (incluida la primera línea con "
+        "los nombres de columna) y pegalo acá abajo."
+    )
+    texto_csv = st.text_area("Pegar contenido del CSV", key="admin_csv_texto", height=150)
+    if texto_csv.strip() and st.button("Importar texto pegado"):
+        with _api_errors("No se pudo importar el CSV pegado"):
+            filas = list(csv.DictReader(io.StringIO(texto_csv)))
             importados, omitidos = auth.import_csv(filas, user_id)
             st.success(f"Importados: {importados} · Omitidos: {omitidos}")
             st.rerun()
@@ -306,8 +380,27 @@ def _admin_screen(user_id: int) -> None:
 
     st.divider()
     st.markdown("**Créditos (para Números SMS — el correo temporal es gratis)**")
-    st.caption(f"Costo actual por número: {SMS_COSTO_CREDITOS} crédito(s). "
-               "Se ajusta con la variable de entorno OLIMPO_SMS_COSTO_CREDITOS.")
+    st.caption(
+        "El costo por número se calcula automáticamente según el precio del país "
+        "en SMSPool: ≤$5 MXN → 10 cr · ≤$10 → 20 cr · ≤$15 → 30 cr · ≤$20 → 40 cr. "
+        "Países más caros no aparecen en el panel."
+    )
+    tasa_actual = smspool.get_config("usd_to_mxn", "18.5")
+    nueva_tasa = st.text_input("Tasa USD → MXN", value=tasa_actual, key="admin_tasa_mxn")
+    if st.button("Guardar tasa"):
+        try:
+            float(nueva_tasa)
+        except ValueError:
+            st.error("Ingresa un número válido para la tasa.")
+        else:
+            with db.get_conn() as conn:
+                conn.execute(
+                    "INSERT INTO smspool_config (key, value) VALUES ('usd_to_mxn', ?) "
+                    "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                    (nueva_tasa.strip(),),
+                )
+            st.success("Tasa actualizada.")
+            st.rerun()
 
     col_cred_id, col_cred_cant = st.columns(2)
     cred_id = col_cred_id.text_input("Telegram ID", key="admin_cred_id")
