@@ -5,8 +5,16 @@ import time
 from datetime import datetime, timedelta, timezone
 
 import aiohttp
+import streamlit as st
 
+import sdk
 from db import get_conn
+
+MODULE_ID = "smspool"
+MODULE_NAME = "📱 Números SMS"
+MODULE_VERSION = "1.1.0"
+MODULE_AUTHOR = "OLIMPO"
+MODULE_DATA_SCOPE = "per_user"  # pedidos con columna user_id en la BD compartida
 
 API_BASE = "https://api.smspool.net"
 CACHE_TTL_SECONDS = 6 * 60 * 60
@@ -243,3 +251,166 @@ def esta_expirado(expires_at: str) -> bool:
         return datetime.now(timezone.utc) >= limite
     except Exception:
         return False
+
+
+def _refund(user_id: int, credits: int, motivo: str) -> None:
+    sdk.refund(user_id, credits, motivo)
+
+
+def render(user_id: int) -> None:
+    st.subheader(MODULE_NAME)
+    st.caption(f"Tienes {sdk.balance(user_id)} crédito(s)")
+
+    estado_key = f"{MODULE_ID}_order"
+    order = st.session_state.get(estado_key)
+
+    if order is None:
+        servicios = []
+        with sdk.api_errors("No se pudo cargar la lista de servicios"):
+            servicios = listar_servicios()
+        if not servicios:
+            return
+
+        servicio = st.selectbox(
+            "Servicio", servicios, format_func=lambda s: s["nombre"], key=f"{MODULE_ID}_servicio",
+        )
+
+        paises = []
+        with sdk.api_errors("No se pudieron cargar los países para este servicio"):
+            paises = listar_paises_servicio(servicio["id"])
+        if not paises:
+            st.info("Sin disponibilidad para este servicio por ahora.")
+            return
+
+        pais = st.selectbox(
+            "País", paises,
+            format_func=lambda p: f"{p['nombre']} — {p['creditos']} crédito(s)",
+            key=f"{MODULE_ID}_pais",
+        )
+        st.caption(f"Costo: {pais['creditos']} crédito(s)")
+
+        if st.button("Obtener número", type="primary", key=f"{MODULE_ID}_comprar"):
+            credits = pais["creditos"]
+            if not sdk.charge(user_id, credits, f"Compra SMS: {servicio['nombre']} {pais['nombre']}"):
+                st.error("No tienes créditos suficientes. Pídele a un admin que te asigne más.")
+            else:
+                # Cobramos antes de llamar a la API: si SMSPool falla, se
+                # reembolsa de inmediato para no dejar créditos en el aire.
+                try:
+                    with st.spinner("Comprando número..."):
+                        compra = comprar_numero(pais["id"], servicio["id"])
+                    registrar_pedido(
+                        user_id, compra["order_id"], compra["number"],
+                        servicio["nombre"], pais["nombre"], credits, compra["expires_in"],
+                    )
+                except Exception as exc:
+                    _refund(user_id, credits, f"Reembolso — error al comprar: {exc}")
+                    st.error(f"No se pudo comprar el número. Créditos devueltos. ({exc})")
+                    return
+
+                expires_at = (
+                    datetime.now(timezone.utc) + timedelta(seconds=compra["expires_in"])
+                ).isoformat()
+                st.session_state[estado_key] = {
+                    "order_id": compra["order_id"],
+                    "number": compra["number"],
+                    "service_name": servicio["nombre"],
+                    "country_name": pais["nombre"],
+                    "credits": credits,
+                    "expires_at": expires_at,
+                    "cancel_deadline": time.time() + CANCEL_WINDOW_SECONDS,
+                    "sms": None,
+                }
+                st.rerun()
+        return
+
+    # Pedido expirado sin código: intento final y reembolso automático.
+    if not order.get("sms") and esta_expirado(order["expires_at"]):
+        resultado = {}
+        with sdk.api_errors("No se pudo verificar el código"):
+            resultado = check_sms(order["order_id"])
+        if resultado.get("sms"):
+            order["sms"] = resultado["sms"]
+            st.session_state[estado_key] = order
+        else:
+            marcar_fallido(order["order_id"])
+            _refund(
+                user_id, order["credits"],
+                f"Reembolso — código no recibido a tiempo ({order['order_id']})",
+            )
+            st.session_state.pop(estado_key, None)
+            st.warning("El número expiró sin recibir código. Tus créditos fueron devueltos.")
+            st.rerun()
+            return
+
+    st.caption(f"{order['service_name']} · {order['country_name']}")
+    st.caption("Número asignado")
+    st.code(order["number"], language=None)
+
+    if order.get("sms"):
+        st.success("Código recibido")
+        st.code(order["sms"], language=None)
+        if st.button("Nuevo pedido", key=f"{MODULE_ID}_nuevo"):
+            st.session_state.pop(estado_key, None)
+            st.rerun()
+        return
+
+    puede_cancelar = time.time() <= order.get("cancel_deadline", 0)
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("Revisar código", key=f"{MODULE_ID}_revisar"):
+            with sdk.api_errors("No se pudo revisar el código"):
+                resultado = check_sms(order["order_id"])
+                if resultado.get("sms"):
+                    order["sms"] = resultado["sms"]
+                    st.session_state[estado_key] = order
+                    st.rerun()
+                else:
+                    st.info("Aún no llega el código. Sigue esperando.")
+    with col2:
+        if puede_cancelar and st.button("Cancelar pedido", key=f"{MODULE_ID}_cancelar"):
+            with sdk.api_errors("No se pudo cancelar el pedido"):
+                cancelar(order["order_id"])
+                _refund(
+                    user_id, order["credits"],
+                    f"Reembolso — cancelación manual ({order['order_id']})",
+                )
+                st.session_state.pop(estado_key, None)
+                st.rerun()
+
+    st.divider()
+    st.caption("Historial de pedidos")
+    with get_conn() as conn:
+        historial = conn.execute(
+            """
+            SELECT * FROM olimpo_sms_orders
+            WHERE user_id = ? ORDER BY requested_at DESC LIMIT 10
+            """,
+            (user_id,),
+        ).fetchall()
+    for h in historial:
+        st.text(f"{h['service_name']} · {h['phone_number']} · {h['status']}")
+
+
+def render_admin(user_id: int) -> None:
+    st.caption(
+        "El costo por número se calcula automáticamente según el precio del país "
+        "en SMSPool: ≤$5 MXN → 10 cr · ≤$10 → 20 cr · ≤$15 → 30 cr · ≤$20 → 40 cr. "
+        "Países más caros no aparecen en el panel."
+    )
+    tasa_actual = get_config("usd_to_mxn", "18.5")
+    nueva_tasa = st.text_input("Tasa USD → MXN", value=tasa_actual, key=f"{MODULE_ID}_admin_tasa")
+    if st.button("Guardar tasa", key=f"{MODULE_ID}_admin_guardar_tasa"):
+        try:
+            float(nueva_tasa)
+        except ValueError:
+            st.error("Ingresa un número válido para la tasa.")
+        else:
+            with get_conn() as conn:
+                conn.execute(
+                    "INSERT INTO smspool_config (key, value) VALUES ('usd_to_mxn', ?) "
+                    "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                    (nueva_tasa.strip(),),
+                )
+            st.success("Tasa actualizada.")
+            st.rerun()
