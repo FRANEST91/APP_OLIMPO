@@ -77,6 +77,10 @@ def _login_screen() -> None:
                 return
             tg_id = int(tg_id_input.strip())
             if not auth.is_whitelisted(tg_id):
+                sdk.alertar(
+                    f"🔒 <b>Acceso denegado</b>\n"
+                    f"👤 <code>{tg_id}</code> intentó entrar sin estar en la whitelist."
+                )
                 st.error("Todavía no tienes acceso a Olimpo. Escríbele al bot para más info.")
                 return
             try:
@@ -103,6 +107,10 @@ def _login_screen() -> None:
                     st.session_state.pop("pending_tg_id", None)
                     st.rerun()
                 else:
+                    sdk.alertar(
+                        f"🔒 <b>Código OTP inválido</b>\n"
+                        f"👤 <code>{tg_id}</code> ingresó un código incorrecto o vencido."
+                    )
                     st.error("Código incorrecto o expirado.")
         with col2:
             if st.button("Cancelar"):

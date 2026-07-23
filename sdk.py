@@ -7,6 +7,7 @@ de datos de otro módulo. La guía completa para escribir un módulo nuevo
 está en MODULOS.md; este archivo es la implementación de esa guía.
 """
 
+import asyncio
 import importlib
 import importlib.util
 import logging
@@ -19,7 +20,10 @@ from pathlib import Path
 
 import requests
 import streamlit as st
+from telegram import Bot
+from telegram.constants import ParseMode
 
+import auth
 import creditos
 from db import get_conn
 
@@ -68,6 +72,55 @@ def api_errors(mensaje: str):
     except Exception:
         log.exception(mensaje)
         st.error(f"{mensaje}. Intenta de nuevo en un momento.")
+
+
+# ---------------------------------------------------------------------------
+# Telegram — entregarle algo a un usuario puntual, o dejar rastro de
+# auditoría para los admins. Ver MODULOS.md sección "Notificaciones".
+# ---------------------------------------------------------------------------
+
+async def _enviar_dm(chat_id: int, texto: str) -> None:
+    async with Bot(token=os.environ["OLIMPO_BOT_TOKEN"]) as bot:
+        await bot.send_message(chat_id=chat_id, text=texto, parse_mode=ParseMode.HTML)
+
+
+def enviar_telegram(user_id: int, texto: str) -> None:
+    """Manda un DM de Telegram a un usuario a través del bot de OLIMPO.
+    Úsalo para entregarle algo importante (un código OTP, la confirmación
+    de una compra) además de mostrarlo en la UI — así le queda un respaldo
+    aunque cierre la pestaña o se le venza la sesión web. Si el envío
+    falla (por ejemplo, el usuario nunca le escribió al bot) no rompe tu
+    módulo — solo se registra en el log."""
+    try:
+        asyncio.run(_enviar_dm(user_id, texto))
+    except Exception:
+        log.exception("sdk: no se pudo enviar DM a %s", user_id)
+
+
+async def _alertar(destinos: list, mensaje: str) -> None:
+    async with Bot(token=os.environ["OLIMPO_BOT_TOKEN"]) as bot:
+        for chat_id in destinos:
+            try:
+                await bot.send_message(chat_id=chat_id, text=mensaje, parse_mode=ParseMode.HTML)
+            except Exception:
+                log.warning("sdk: no se pudo enviar la alerta a %s", chat_id)
+
+
+def alertar(mensaje: str) -> None:
+    """Manda un mensaje de auditoría: a OLIMPO_LOG_CHANNEL_ID si está
+    configurado, o por DM a todos los admins (OLIMPO_ADMINS) si no.
+    Pensado para dejar rastro de cualquier cobro, reembolso, entrega de
+    código o intento de acceso fallido — así ni el usuario ni el módulo
+    externo pueden alegar algo que no pasó. Nunca lanza — si falla el
+    envío, solo se registra en el log."""
+    canal = os.getenv("OLIMPO_LOG_CHANNEL_ID")
+    destinos = [canal] if canal else auth.list_admin_ids()
+    if not destinos:
+        return
+    try:
+        asyncio.run(_alertar(destinos, mensaje))
+    except Exception:
+        log.exception("sdk: no se pudo enviar la alerta")
 
 
 # ---------------------------------------------------------------------------
