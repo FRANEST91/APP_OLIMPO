@@ -35,6 +35,14 @@ class MainActivity : AppCompatActivity() {
                 data.data != null -> arrayOf(data.data!!)
                 else -> null
             }
+            // Diagnóstico temporal: confirma qué llega realmente de vuelta
+            // (resultCode, si hay data, cuántos URIs) para saber si el app
+            // elegido (ej. Telegram) devuelve algo utilizable o no.
+            Toast.makeText(
+                this@MainActivity,
+                "resultCode=${result.resultCode} uris=${uris?.size ?: 0}",
+                Toast.LENGTH_LONG
+            ).show()
             filePathCallback?.onReceiveValue(uris)
             filePathCallback = null
         }

@@ -48,7 +48,16 @@ jobs:
         env:
           BUILD_TOOLS_VERSION: "34.0.0"
 
+      - name: Rename to OLIMPO.apk
+        # La action de firma agrega "-signed" al nombre (OLIMPO.apk ->
+        # OLIMPO-signed.apk); se renombra al nombre oficial exacto. Se
+        # fija working-directory a la raíz del repo porque
+        # signedReleaseFile viene resuelto por esa action relativo ahí,
+        # no al defaults.run.working-directory (android/) del resto del job.
+        working-directory: ${{ github.workspace }}
+        run: mv "${{ steps.sign_apk.outputs.signedReleaseFile }}" android/app/build/outputs/apk/release/OLIMPO.apk
+
       - uses: actions/upload-artifact@v4
         with:
-          name: olimpo-release.apk
-          path: ${{ steps.sign_apk.outputs.signedReleaseFile }}
+          name: OLIMPO.apk
+          path: android/app/build/outputs/apk/release/OLIMPO.apk
