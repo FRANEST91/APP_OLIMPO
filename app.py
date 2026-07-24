@@ -211,8 +211,12 @@ def _modulos_admin_screen(user_id: int) -> None:
         if not module_id or not module_id.replace("_", "").isalnum():
             st.error("El ID del módulo debe ser alfanumérico (guiones bajos permitidos).")
         else:
-            with _api_errors("No se pudo agregar el módulo"):
+            try:
                 sdk.registrar_externo(module_id, archivo_mod.getvalue())
+            except Exception as exc:
+                logger.exception("No se pudo agregar el módulo %s", module_id)
+                st.error(f"No se pudo agregar el módulo: {exc}")
+            else:
                 st.success(f"Módulo '{module_id}' agregado como externo.")
                 st.rerun()
 
@@ -229,8 +233,12 @@ def _modulos_admin_screen(user_id: int) -> None:
         if not module_id or not module_id.replace("_", "").isalnum():
             st.error("El ID del módulo debe ser alfanumérico (guiones bajos permitidos).")
         else:
-            with _api_errors("No se pudo agregar el módulo"):
+            try:
                 sdk.registrar_externo(module_id, codigo_pegado.encode("utf-8"))
+            except Exception as exc:
+                logger.exception("No se pudo agregar el módulo %s", module_id)
+                st.error(f"No se pudo agregar el módulo: {exc}")
+            else:
                 st.success(f"Módulo '{module_id}' agregado como externo.")
                 st.rerun()
 
