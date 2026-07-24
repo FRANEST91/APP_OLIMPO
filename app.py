@@ -167,6 +167,31 @@ def _modulos_admin_screen(user_id: int) -> None:
                     with _api_errors(f"Error en la configuración de {m['nombre']}"):
                         render_admin(user_id)
 
+            with st.expander(f"Datos de {m['nombre']}"):
+                st.caption(
+                    "Archivos de referencia propios del módulo (por ejemplo un .db que "
+                    "solo consulta) — sdk.module_dir() en MODULOS.md."
+                )
+                archivos = sdk.listar_archivos_modulo(m["module_id"])
+                if not archivos:
+                    st.caption("Sin archivos todavía.")
+                for nombre_archivo in archivos:
+                    col_nombre, col_borrar = st.columns([3, 1])
+                    col_nombre.text(nombre_archivo)
+                    if col_borrar.button("Eliminar", key=f"admin_mod_data_del_{m['module_id']}_{nombre_archivo}"):
+                        sdk.eliminar_archivo_modulo(m["module_id"], nombre_archivo)
+                        st.rerun()
+                nuevo_archivo = st.file_uploader(
+                    "Agregar archivo", key=f"admin_mod_data_upload_{m['module_id']}",
+                )
+                if nuevo_archivo is not None and st.button(
+                    "Guardar archivo", key=f"admin_mod_data_guardar_{m['module_id']}",
+                ):
+                    with _api_errors("No se pudo guardar el archivo"):
+                        sdk.guardar_archivo_modulo(m["module_id"], nuevo_archivo.name, nuevo_archivo.getvalue())
+                        st.success(f"'{nuevo_archivo.name}' guardado.")
+                        st.rerun()
+
     st.divider()
     st.markdown("**Agregar módulo externo**")
     st.caption(
@@ -188,6 +213,40 @@ def _modulos_admin_screen(user_id: int) -> None:
                 sdk.registrar_externo(module_id, archivo_mod.getvalue())
                 st.success(f"Módulo '{module_id}' agregado como externo.")
                 st.rerun()
+
+
+def _bases_compartidas_admin_screen(user_id: int) -> None:
+    st.markdown("**Bases de datos compartidas**")
+    st.caption(
+        "Subí acá una base SQLite (por ejemplo, usuarios activos traídos de otro "
+        "sistema). Queda disponible en modo solo lectura para cualquier módulo, "
+        "vía sdk.bd_compartida(nombre) — ver MODULOS.md."
+    )
+
+    for nombre in sdk.listar_bd_compartidas():
+        with st.container(border=True):
+            col_nombre, col_borrar = st.columns([3, 1])
+            col_nombre.markdown(f"**{nombre}**")
+            if col_borrar.button("Eliminar", key=f"admin_bd_del_{nombre}"):
+                sdk.eliminar_bd_compartida(nombre)
+                st.rerun()
+            with _api_errors("No se pudo leer la base de datos"):
+                tablas = sdk.inspeccionar_bd_compartida(nombre)
+                if tablas:
+                    for t in tablas:
+                        st.text(f"{t['tabla']} · {t['filas']} fila(s)")
+                else:
+                    st.caption("Sin tablas.")
+
+    archivo_bd = st.file_uploader("Archivo .db", type=["db", "sqlite", "sqlite3"], key="admin_bd_upload")
+    nombre_bd = st.text_input(
+        "Nombre para guardarla", value=archivo_bd.name if archivo_bd else "", key="admin_bd_nombre",
+    )
+    if archivo_bd is not None and st.button("Subir base de datos"):
+        with _api_errors("No se pudo guardar la base de datos"):
+            sdk.registrar_bd_compartida(nombre_bd.strip() or archivo_bd.name, archivo_bd.getvalue())
+            st.success("Base de datos guardada.")
+            st.rerun()
 
 
 def _admin_screen(user_id: int) -> None:
@@ -334,6 +393,9 @@ def _admin_screen(user_id: int) -> None:
             if col_b.button("Eliminar", key=f"del_img_{img['id']}", width="stretch"):
                 carrusel.eliminar_imagen(img["id"])
                 st.rerun()
+
+    st.divider()
+    _bases_compartidas_admin_screen(user_id)
 
     st.divider()
     _modulos_admin_screen(user_id)
