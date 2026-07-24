@@ -120,7 +120,7 @@ funcionando. Es el mismo patrón que usa el resto de OLIMPO.
 
 ---
 
-## 4. Datos — los 3 patrones de persistencia
+## 4. Datos — los patrones de persistencia
 
 Todo pasa por `sdk.py`, nunca importes `db.py` directamente desde un
 módulo nuevo (los módulos internos históricos lo hacen porque son
@@ -181,10 +181,50 @@ with sdk.user_db(MODULE_ID, user_id) as conn:
     conn.execute("INSERT INTO notas (texto) VALUES (?)", (texto,))
 ```
 
-Esto vive en `data/modulos/<MODULE_ID>/<user_id>.db`, fuera de git y
-fuera de la base compartida — cada usuario es completamente
+Esto vive en `data/modulos/<MODULE_ID>/usuarios/<user_id>.db`, fuera de
+git y fuera de la base compartida — cada usuario es completamente
 independiente. Usalo solo si de verdad necesitás ese aislamiento; para
 la mayoría de los casos alcanza con el patrón (b).
+
+### d) Datos de referencia propios del módulo (solo lectura)
+
+Para cuando tu módulo necesita **consultar** una base de datos que ya
+existe — un catálogo, una tabla de precios, un dataset que armaste
+aparte — pero no crearla ni escribirla desde OLIMPO. `sdk.module_dir`
+te da una carpeta propia del módulo para este tipo de archivo:
+
+```python
+ruta = sdk.module_dir(MODULE_ID) / "catalogo.db"
+
+with sdk.abrir_solo_lectura(ruta) as conn:
+    filas = conn.execute("SELECT * FROM productos WHERE categoria = ?", (cat,)).fetchall()
+```
+
+`abrir_solo_lectura` conecta en modo `mode=ro` de SQLite: cualquier
+intento de `INSERT`/`UPDATE`/`DELETE` falla, así que queda garantizado
+que el módulo solo consulta. El archivo se sube y se administra (listar,
+subir, borrar) desde **Admin > Gestión de módulos**, en el expander
+"Datos de \<tu módulo\>" de la tarjeta de tu módulo — vive en
+`data/modulos/<MODULE_ID>/datos/`, fuera de git.
+
+### e) Bases de datos compartidas subidas por un admin
+
+Para datos que no son de un módulo en particular — por ejemplo, una
+base de "usuarios activos" traída de otro sistema, que varios módulos
+(o el propio núcleo) necesitan consultar. Un admin la sube una sola vez
+desde **Admin > Bases de datos compartidas**, y cualquier módulo puede
+leerla:
+
+```python
+with sdk.bd_compartida("usuarios_activos.db") as conn:
+    activos = conn.execute("SELECT * FROM usuarios WHERE activo = 1").fetchall()
+
+sdk.listar_bd_compartidas()  # ["usuarios_activos.db", ...]
+```
+
+También es de solo lectura — para actualizarla, un admin la vuelve a
+subir desde el panel (se valida que sea un SQLite real antes de
+aceptarla). Vive en `data/compartidas/`, fuera de git.
 
 ---
 

@@ -33,6 +33,7 @@ BASE_DIR = Path(__file__).parent
 MODULES_DIR = BASE_DIR / "modules"
 EXTERNAL_DIR = BASE_DIR / "external_modules"
 USER_DB_DIR = BASE_DIR / "data" / "modulos"
+SHARED_DB_DIR = BASE_DIR / "data" / "compartidas"
 
 REQUIRED_ATTRS = ("MODULE_ID", "MODULE_NAME", "render")
 
@@ -161,11 +162,11 @@ def set_config(module_id: str, key: str, value: str) -> None:
 @contextmanager
 def user_db(module_id: str, user_id: int):
     """Conexión a un archivo SQLite exclusivo de un usuario para este
-    módulo (data/modulos/<module_id>/<user_id>.db). Usalo solo cuando cada
-    usuario necesita su propio conjunto de datos aislado — no para guardar
-    unas pocas filas (para eso alcanza con una tabla + columna user_id en
-    la base compartida, vía db_conn())."""
-    folder = USER_DB_DIR / module_id
+    módulo (data/modulos/<module_id>/usuarios/<user_id>.db). Usalo solo
+    cuando cada usuario necesita su propio conjunto de datos aislado — no
+    para guardar unas pocas filas (para eso alcanza con una tabla +
+    columna user_id en la base compartida, vía db_conn())."""
+    folder = USER_DB_DIR / module_id / "usuarios"
     folder.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(folder / f"{user_id}.db")
     conn.row_factory = sqlite3.Row
@@ -174,6 +175,105 @@ def user_db(module_id: str, user_id: int):
         conn.commit()
     finally:
         conn.close()
+
+
+@contextmanager
+def abrir_solo_lectura(ruta: Path):
+    """Conexión de solo lectura a cualquier archivo SQLite existente —
+    cualquier intento de escritura falla. Es el helper interno de
+    module_dir()/bd_compartida(); también podés usarlo directo si ya
+    tenés la ruta a un .db que solo querés consultar."""
+    if not ruta.exists():
+        raise FileNotFoundError(f"No existe el archivo: {ruta}")
+    conn = sqlite3.connect(f"file:{ruta}?mode=ro", uri=True)
+    conn.row_factory = sqlite3.Row
+    try:
+        yield conn
+    finally:
+        conn.close()
+
+
+def module_dir(module_id: str) -> Path:
+    """Carpeta propia del módulo para datos de referencia que no son ni
+    config (get_config/set_config) ni filas por usuario (db_conn) ni un
+    archivo por usuario (user_db) — por ejemplo un .db de catálogo que el
+    módulo trae consigo y solo consulta. Se crea si no existe. Los
+    archivos que pongas ahí se administran (subir/listar/borrar) desde
+    Admin > Gestión de módulos, en la tarjeta de tu módulo."""
+    folder = USER_DB_DIR / module_id / "datos"
+    folder.mkdir(parents=True, exist_ok=True)
+    return folder
+
+
+def listar_archivos_modulo(module_id: str) -> list[str]:
+    return sorted(p.name for p in module_dir(module_id).iterdir() if p.is_file())
+
+
+def guardar_archivo_modulo(module_id: str, nombre_archivo: str, contenido: bytes) -> None:
+    (module_dir(module_id) / nombre_archivo).write_bytes(contenido)
+
+
+def eliminar_archivo_modulo(module_id: str, nombre_archivo: str) -> None:
+    (module_dir(module_id) / nombre_archivo).unlink(missing_ok=True)
+
+
+# ---------------------------------------------------------------------------
+# Bases de datos compartidas — subidas por un admin desde el panel (por
+# ejemplo, una BD de usuarios activos traída de otro sistema), visibles
+# en modo solo lectura para cualquier módulo, interno o externo, y
+# también para el propio app.py.
+# ---------------------------------------------------------------------------
+
+def listar_bd_compartidas() -> list[str]:
+    SHARED_DB_DIR.mkdir(parents=True, exist_ok=True)
+    return sorted(p.name for p in SHARED_DB_DIR.glob("*.db"))
+
+
+@contextmanager
+def bd_compartida(nombre: str):
+    """Conexión de solo lectura a un .db subido en Admin > Bases de datos
+    compartidas. Cualquier módulo puede leerla; nadie puede escribirla
+    desde acá — para actualizarla hay que volver a subirla desde Admin."""
+    with abrir_solo_lectura(SHARED_DB_DIR / nombre) as conn:
+        yield conn
+
+
+def registrar_bd_compartida(nombre: str, contenido: bytes) -> None:
+    """Guarda un archivo subido desde Admin como base compartida. Se
+    valida que sea un SQLite real antes de aceptarlo — si no lo es, no se
+    guarda nada."""
+    SHARED_DB_DIR.mkdir(parents=True, exist_ok=True)
+    if not nombre.endswith(".db"):
+        nombre += ".db"
+    ruta = SHARED_DB_DIR / nombre
+    ruta.write_bytes(contenido)
+    try:
+        conn = sqlite3.connect(f"file:{ruta}?mode=ro", uri=True)
+        conn.execute("SELECT name FROM sqlite_master LIMIT 1")
+        conn.close()
+    except Exception:
+        ruta.unlink(missing_ok=True)
+        raise ValueError("El archivo no es una base de datos SQLite válida")
+
+
+def eliminar_bd_compartida(nombre: str) -> None:
+    (SHARED_DB_DIR / nombre).unlink(missing_ok=True)
+
+
+def inspeccionar_bd_compartida(nombre: str) -> list[dict]:
+    """Nombre y cantidad de filas de cada tabla — para que Admin pueda
+    confirmar que lo que subió es lo que esperaba, sin saber SQL."""
+    tablas = []
+    with bd_compartida(nombre) as conn:
+        nombres_tablas = [
+            r["name"] for r in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'"
+            )
+        ]
+        for t in nombres_tablas:
+            count = conn.execute(f'SELECT COUNT(*) AS n FROM "{t}"').fetchone()["n"]
+            tablas.append({"tabla": t, "filas": count})
+    return tablas
 
 
 # ---------------------------------------------------------------------------

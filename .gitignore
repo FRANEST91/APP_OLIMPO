@@ -19,9 +19,11 @@ __pycache__/
 .venv/
 *.db
 
-# SDK de módulos: código externo y BDs propias por usuario, no van al repo
+# SDK de módulos: código externo, BDs propias por módulo/usuario y BDs
+# compartidas subidas desde Admin — ninguna va al repo
 external_modules/
 data/modulos/
+data/compartidas/
 
 # Streamlit / secrets
 .streamlit/secrets.toml
