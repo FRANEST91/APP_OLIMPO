@@ -293,6 +293,53 @@ usuario puntual por Telegram, y dejar un rastro de auditoría para los
 admins. Los dos van por el bot de OLIMPO (`OLIMPO_BOT_TOKEN`), así que
 no necesitás manejar ningún token vos mismo.
 
+### ¿De dónde sale el `user_id` al que le mando algo?
+
+No hay que "consultarlo" en ningún lado especial — es el mismo
+`user_id` que ya tenés como parámetro, en dos situaciones distintas:
+
+**Caso 1 — mientras el usuario está interactuando con tu módulo.**
+`render(user_id)` se ejecuta con el Telegram ID real de quien tiene la
+pestaña abierta en ese momento (`app.py` lo fija en `st.session_state`
+después de que verifica el OTP en el login). Cualquier cosa que pase
+**dentro de esa misma llamada** — comprar un número, revisar si llegó
+un código, leer un correo — ya tiene ese `user_id` a mano. Es el caso de
+`smspool.py`: compra, reembolso y entrega de código pasan todos dentro
+de `render()`, así que `sdk.enviar_telegram(user_id, ...)` usa
+directamente el parámetro, sin buscar nada.
+
+**Caso 2 — el evento no ocurre en la misma pasada que lo originó** (por
+ejemplo, un correo nuevo llega a una cuenta que se creó hace días, o
+querés reaccionar a un pedido por su ticket sin que el dueño esté
+mirando la pantalla). Ahí el `user_id` no está en ningún parámetro —
+tiene que salir de **tu propia tabla** (patrón (b) de la sección 4):
+guardá el `user_id` como columna junto con el registro cuando lo creás,
+y buscalo por el identificador del registro cuando necesites saber a
+quién avisarle:
+
+```python
+def notificar_por_ticket(ticket_id: str, texto: str) -> None:
+    with sdk.db_conn() as conn:
+        row = conn.execute(
+            "SELECT user_id FROM mimodulo_pedidos WHERE ticket_id = ?", (ticket_id,)
+        ).fetchone()
+    if row:
+        sdk.enviar_telegram(row["user_id"], texto)
+```
+
+Así lo hace `smspool.py`: `olimpo_sms_orders` guarda el `user_id` de
+quien compró cada número en el momento de la compra — es la fuente de
+verdad para saber a quién pertenece ese pedido, sea cual sea el momento
+en que se resuelva.
+
+**Nunca derives ni adivines** el `user_id` de otro módulo (leyendo su
+tabla directamente) ni de la sesión de otro módulo — cada módulo
+mantiene su propio mapeo registro → usuario. Y si tu módulo necesita
+avisarle a un usuario *distinto* del que está interactuando ahora mismo
+(por ejemplo, una acción en `render_admin()` que actúa sobre otro
+usuario), pedí el Telegram ID explícitamente con un `st.text_input` —
+no lo inventes.
+
 ### DM a un usuario
 
 ```python
