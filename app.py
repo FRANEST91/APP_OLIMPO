@@ -197,7 +197,9 @@ def _modulos_admin_screen(user_id: int) -> None:
     st.caption(
         "Subí un archivo .py que cumpla el contrato de MODULOS.md (MODULE_ID, "
         "MODULE_NAME, render()). Se valida antes de activarlo — si falta algo "
-        "requerido, no se guarda nada."
+        "requerido, no se guarda nada. Alternativa sin pasar por acá: subir el "
+        ".py directo a la carpeta modules/ del repo por GitHub — se registra solo "
+        "como interno la próxima vez que arranque la app."
     )
     archivo_mod = st.file_uploader("Archivo del módulo (.py)", type="py", key="admin_mod_upload")
     id_sugerido = archivo_mod.name[:-3] if archivo_mod else ""
@@ -211,6 +213,24 @@ def _modulos_admin_screen(user_id: int) -> None:
         else:
             with _api_errors("No se pudo agregar el módulo"):
                 sdk.registrar_externo(module_id, archivo_mod.getvalue())
+                st.success(f"Módulo '{module_id}' agregado como externo.")
+                st.rerun()
+
+    st.caption(
+        "¿El selector de archivos no te deja elegir el .py? Abrilo con cualquier "
+        "app de texto, copiá todo el código y pegalo acá abajo."
+    )
+    codigo_pegado = st.text_area("Pegar código del módulo", key="admin_mod_texto", height=150)
+    id_sugerido_texto = st.text_input(
+        "ID del módulo (para el código pegado)", key="admin_mod_id_texto",
+    )
+    if codigo_pegado.strip() and st.button("Agregar módulo desde texto pegado"):
+        module_id = id_sugerido_texto.strip().lower()
+        if not module_id or not module_id.replace("_", "").isalnum():
+            st.error("El ID del módulo debe ser alfanumérico (guiones bajos permitidos).")
+        else:
+            with _api_errors("No se pudo agregar el módulo"):
+                sdk.registrar_externo(module_id, codigo_pegado.encode("utf-8"))
                 st.success(f"Módulo '{module_id}' agregado como externo.")
                 st.rerun()
 
