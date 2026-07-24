@@ -394,7 +394,16 @@ Todo esto vive en **Admin > Gestión de módulos**:
   (que tenga `MODULE_ID`, `MODULE_NAME` y `render`) antes de guardarlo.
   Si no cumple el contrato, no se guarda nada. Vive en
   `external_modules/`, fuera de git — así se puede probar sin tocar el
-  código versionado.
+  código versionado. Si el selector de archivos del celular no deja
+  elegir el `.py` (pasa en algunos Android/MIUI), hay un campo para
+  pegar el código directo, igual que con el CSV de usuarios.
+- **Subir el `.py` directo a `modules/` por GitHub** — sin pasar por el
+  panel para nada. Si el archivo cumple el contrato, `sdk.descubrir_e_instalar()`
+  lo detecta y lo registra solo como **interno** la próxima vez que
+  arranca la app (cada redeploy, en Railway). Es la vía más simple desde
+  el celular: subís el archivo con la app de GitHub a la misma carpeta
+  donde están `smspool.py` y `tempmail.py`, y listo — no hace falta ni
+  loguearse como admin en OLIMPO.
 - **Hacer interno** — "gradúa" un módulo externo copiando su archivo a
   `modules/`, para que quede versionado como parte oficial de OLIMPO.
   Después de esto, alguien con acceso al repo tiene que hacer
