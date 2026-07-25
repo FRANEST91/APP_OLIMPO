@@ -301,7 +301,7 @@ No hay que "consultarlo" en ningún lado especial — es el mismo
 **Caso 1 — mientras el usuario está interactuando con tu módulo.**
 `render(user_id)` se ejecuta con el Telegram ID real de quien tiene la
 pestaña abierta en ese momento (`app.py` lo fija en `st.session_state`
-después de que verifica el OTP en el login). Cualquier cosa que pase
+después de que confirma el acceso desde Telegram en el login). Cualquier cosa que pase
 **dentro de esa misma llamada** — comprar un número, revisar si llegó
 un código, leer un correo — ya tiene ese `user_id` a mano. Es el caso de
 `smspool.py`: compra, reembolso y entrega de código pasan todos dentro
@@ -348,7 +348,7 @@ sdk.enviar_telegram(user_id, "📱 Tu número: <code>+52...</code>")
 
 Úsalo para entregarle al usuario algo que no querés que dependa de que
 tenga la pestaña del navegador abierta: el número asignado, el costo
-cobrado, el código OTP cuando llega, la confirmación de un reembolso.
+cobrado, la confirmación de un reembolso.
 Si el envío falla (por ejemplo, nunca le escribió al bot) no rompe tu
 módulo — se loguea y listo.
 
@@ -378,8 +378,9 @@ canal. Es la prueba que evita discusiones más adelante — usala en
 copiar para cualquier módulo que cobre créditos.
 
 También se usa para intentos de acceso fallidos a la app en sí (ver
-`app.py::_login_screen` — Telegram ID no autorizado, código OTP
-incorrecto), aunque eso no es parte de ningún módulo puntual.
+`app.py::_login_screen` — Telegram ID no autorizado — y
+`bot_auth.py::on_login_callback` — alguien rechazó una solicitud de
+login), aunque eso no es parte de ningún módulo puntual.
 
 ---
 

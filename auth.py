@@ -1,50 +1,119 @@
 import os
 import secrets
-import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
-from telegram import Bot
+from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ParseMode
 
 from db import get_conn
 
-OTP_TTL_SECONDS = 60
-MAX_ATTEMPTS = 3
-
-# OTPs activos: {tg_id: {"code": str, "expires_at": float, "attempts": int}}
-_pending: dict = {}
+LOGIN_TTL_SECONDS = 120
+RESEND_COOLDOWN_SECONDS = 30
 
 
-async def send_otp(tg_id: int, bot: Bot) -> str:
-    code = str(secrets.randbelow(900000) + 100000)  # 6 dígitos
-    _pending[tg_id] = {
-        "code": code,
-        "expires_at": time.time() + OTP_TTL_SECONDS,
-        "attempts": 0,
-    }
+class LoginCooldown(Exception):
+    """Ya hay una solicitud de acceso vigente para este tg_id."""
+
+
+async def crear_solicitud(tg_id: int, bot: Bot) -> str:
+    """Login sin código tipeado: se manda un mensaje con botones a Telegram
+    y hay que tocar "Fui yo, entrar" desde ahí. Un código de 6 dígitos (o
+    un link) se puede copiar y reenviar a cualquiera con el mismo efecto
+    que prestarle la sesión — esto obliga a que la confirmación pase por
+    una acción en vivo dentro de la cuenta real de Telegram, no por un
+    valor que se pueda pegar en otro chat.
+    """
+    ahora = datetime.now(timezone.utc)
+
+    with get_conn() as conn:
+        # Limpieza liviana: sin esto la tabla crece para siempre, no hay
+        # cron ni proceso aparte que la pode.
+        conn.execute(
+            "DELETE FROM login_requests WHERE created_at < ?",
+            ((ahora - timedelta(days=1)).isoformat(),),
+        )
+
+        pendiente = conn.execute(
+            """
+            SELECT created_at, expires_at FROM login_requests
+            WHERE tg_id = ? AND status = 'pending'
+            ORDER BY created_at DESC LIMIT 1
+            """,
+            (tg_id,),
+        ).fetchone()
+        if pendiente and datetime.fromisoformat(pendiente["expires_at"]) > ahora:
+            creado = datetime.fromisoformat(pendiente["created_at"])
+            if (ahora - creado).total_seconds() < RESEND_COOLDOWN_SECONDS:
+                raise LoginCooldown()
+
+        token = secrets.token_urlsafe(24)
+        expira = ahora + timedelta(seconds=LOGIN_TTL_SECONDS)
+        conn.execute(
+            """
+            INSERT INTO login_requests (token, tg_id, status, created_at, expires_at)
+            VALUES (?, ?, 'pending', ?, ?)
+            """,
+            (token, tg_id, ahora.isoformat(), expira.isoformat()),
+        )
+
+    teclado = InlineKeyboardMarkup([[
+        InlineKeyboardButton("✅ Fui yo, entrar", callback_data=f"login_ok:{token}"),
+        InlineKeyboardButton("🚫 No fui yo", callback_data=f"login_no:{token}"),
+    ]])
     await bot.send_message(
         chat_id=tg_id,
-        text=f"🔐 Tu código: <code>{code}</code>\nVence en 1 minuto.",
+        text=(
+            "🔐 <b>Solicitud de acceso a OLIMPO</b>\n"
+            "Alguien está intentando entrar con tu cuenta. Si fuiste tú, "
+            "confirma abajo. Vence en 2 minutos."
+        ),
         parse_mode=ParseMode.HTML,
+        reply_markup=teclado,
     )
-    return code
+    return token
 
 
-def verify_otp(tg_id: int, entered: str) -> bool:
-    entry = _pending.get(tg_id)
-    if not entry:
-        return False
-    entry["attempts"] += 1
-    if entry["attempts"] > MAX_ATTEMPTS:
-        _pending.pop(tg_id, None)
-        return False
-    if time.time() > entry["expires_at"]:
-        _pending.pop(tg_id, None)
-        return False
-    ok = entered.strip() == entry["code"]
-    if ok:
-        _pending.pop(tg_id, None)
-    return ok
+def estado_solicitud(token: str) -> str:
+    """'pending' | 'confirmed' | 'denied' | 'expired' | 'not_found'."""
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT status, expires_at FROM login_requests WHERE token = ?", (token,)
+        ).fetchone()
+    if row is None:
+        return "not_found"
+    if row["status"] == "pending" and datetime.fromisoformat(row["expires_at"]) < datetime.now(timezone.utc):
+        return "expired"
+    return row["status"]
+
+
+def resolver_solicitud(token: str, presser_tg_id: int, aceptar: bool) -> tuple[str, int | None]:
+    """Llamado desde el bot cuando alguien toca uno de los botones.
+
+    Devuelve (resultado, tg_id_dueño). resultado es uno de:
+    "ok" | "no_autorizado" | "ya_resuelto" | "vencido" | "not_found".
+
+    El chequeo de que quien tocó el botón (presser_tg_id) sea el mismo
+    tg_id al que le mandamos la solicitud pasa ANTES de tocar el estado en
+    la base — así, si alguien reenvía el mensaje con los botones a otro
+    chat, quien lo toque ahí no puede resolver la solicitud ajena.
+    """
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT tg_id, status, expires_at FROM login_requests WHERE token = ?", (token,)
+        ).fetchone()
+        if row is None:
+            return "not_found", None
+        if row["tg_id"] != presser_tg_id:
+            return "no_autorizado", row["tg_id"]
+        if row["status"] != "pending":
+            return "ya_resuelto", row["tg_id"]
+        if datetime.fromisoformat(row["expires_at"]) < datetime.now(timezone.utc):
+            conn.execute("UPDATE login_requests SET status = 'denied' WHERE token = ?", (token,))
+            return "vencido", row["tg_id"]
+
+        nuevo_status = "confirmed" if aceptar else "denied"
+        conn.execute("UPDATE login_requests SET status = ? WHERE token = ?", (nuevo_status, token))
+    return "ok", row["tg_id"]
 
 
 def list_admin_ids() -> list[int]:

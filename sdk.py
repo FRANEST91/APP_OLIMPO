@@ -210,7 +210,13 @@ def listar_archivos_modulo(module_id: str) -> list[str]:
 
 
 def guardar_archivo_modulo(module_id: str, nombre_archivo: str, contenido: bytes) -> None:
-    (module_dir(module_id) / nombre_archivo).write_bytes(contenido)
+    # Path(...).name descarta cualquier componente de carpeta (incluido
+    # "../") — el nombre viene del selector de archivos del navegador, no
+    # hay que confiar en que no traiga una ruta.
+    nombre_seguro = Path(nombre_archivo).name
+    if not nombre_seguro:
+        raise ValueError("Nombre de archivo inválido")
+    (module_dir(module_id) / nombre_seguro).write_bytes(contenido)
 
 
 def eliminar_archivo_modulo(module_id: str, nombre_archivo: str) -> None:
@@ -243,6 +249,9 @@ def registrar_bd_compartida(nombre: str, contenido: bytes) -> None:
     valida que sea un SQLite real antes de aceptarlo — si no lo es, no se
     guarda nada."""
     SHARED_DB_DIR.mkdir(parents=True, exist_ok=True)
+    nombre = Path(nombre).name
+    if not nombre or nombre in (".", ".."):
+        raise ValueError("Nombre de base de datos inválido")
     if not nombre.endswith(".db"):
         nombre += ".db"
     ruta = SHARED_DB_DIR / nombre
@@ -257,7 +266,7 @@ def registrar_bd_compartida(nombre: str, contenido: bytes) -> None:
 
 
 def eliminar_bd_compartida(nombre: str) -> None:
-    (SHARED_DB_DIR / nombre).unlink(missing_ok=True)
+    (SHARED_DB_DIR / Path(nombre).name).unlink(missing_ok=True)
 
 
 def inspeccionar_bd_compartida(nombre: str) -> list[dict]:
@@ -271,7 +280,12 @@ def inspeccionar_bd_compartida(nombre: str) -> list[dict]:
             )
         ]
         for t in nombres_tablas:
-            count = conn.execute(f'SELECT COUNT(*) AS n FROM "{t}"').fetchone()["n"]
+            # Escapar comillas dobles duplicándolas es la forma correcta de
+            # citar un identificador en SQLite — sin esto, un nombre de
+            # tabla con una comilla adentro (el .db lo sube un admin, pero
+            # no hay por qué confiar en su contenido) rompe la consulta.
+            t_seguro = t.replace('"', '""')
+            count = conn.execute(f'SELECT COUNT(*) AS n FROM "{t_seguro}"').fetchone()["n"]
             tablas.append({"tabla": t, "filas": count})
     return tablas
 
@@ -372,13 +386,14 @@ def descubrir_e_instalar() -> None:
         try:
             mod = _importar_interno(module_id)
         except Exception:
+            log.exception("No se pudo importar el módulo interno %s", module_id)
             continue
         _registrar_fila(module_id, mod, "interno", activo=1)
         _loaded[module_id] = mod
         try:
             _on_activar(mod)
         except Exception:
-            pass
+            log.exception("on_activar() falló para el módulo %s", module_id)
 
 
 def _cargar(fila) -> object:
@@ -410,6 +425,7 @@ def modulos_activos() -> list:
         try:
             mod = _cargar(fila)
         except Exception:
+            log.exception("No se pudo cargar el módulo %s", fila["module_id"])
             continue
         activos.append((dict(fila), mod))
     return activos
@@ -423,7 +439,7 @@ def activar(module_id: str) -> None:
         try:
             _on_activar(_cargar(fila))
         except Exception:
-            pass
+            log.exception("on_activar() falló al activar el módulo %s", module_id)
 
 
 def desactivar(module_id: str) -> None:
@@ -458,7 +474,7 @@ def registrar_externo(module_id: str, contenido: bytes) -> None:
     try:
         _on_activar(mod)
     except Exception:
-        pass
+        log.exception("on_activar() falló para el módulo externo %s", module_id)
 
 
 def hacer_interno(module_id: str) -> None:
