@@ -41,11 +41,13 @@ alertas se mandan por DM a todos los IDs en `OLIMPO_ADMINS`.
 streamlit run app.py
 ```
 
-Abre `http://localhost:8501`. Como usas el bot real, los OTP llegan a tu
-Telegram de verdad.
+Abre `http://localhost:8501`. El login manda un mensaje con botones a tu
+Telegram real ("✅ Fui yo, entrar" / "🚫 No fui yo") en vez de un código
+para tipear.
 
-Para probar el bot de auth (`/start` mostrando el Telegram ID) hace falta
-correrlo aparte, en otra terminal:
+`bot_auth.py` ya no es opcional: es el proceso que escucha cuándo tocas
+ese botón, sin él el login se queda esperando para siempre. Corrélo
+aparte, en otra terminal, antes de intentar entrar a la app:
 
 ```bash
 python bot_auth.py
@@ -56,9 +58,9 @@ python bot_auth.py
 | Archivo | Qué hace |
 |---|---|
 | `app.py` | UI de Streamlit: login, TempMail, SMS Pool, Admin |
-| `auth.py` | OTP, whitelist, admins |
+| `auth.py` | Solicitudes de login por botón, whitelist, admins |
 | `db.py` | Schema de SQLite e inicialización |
-| `bot_auth.py` | Bot de Telegram que responde `/start` con el Telegram ID |
+| `bot_auth.py` | Bot de Telegram: `/start` con el Telegram ID + botones de confirmación de login |
 | `modules/tempmail.py` | Wrapper de api.mail.tm |
 | `modules/smspool.py` | Wrapper de api.smspool.net |
 | `modules/_template.py` | Plantilla para módulos nuevos |

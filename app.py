@@ -8,7 +8,6 @@ import logging
 import os
 import time
 from contextlib import contextmanager
-from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -38,11 +37,11 @@ db.init_db()
 sdk.descubrir_e_instalar()
 
 
-async def _send_otp(tg_id: int) -> None:
+async def _crear_solicitud_login(tg_id: int) -> str:
     # Bot debe usarse como context manager: si no, el cliente HTTP interno
     # nunca se cierra y cada login deja una conexión abierta (leak).
     async with Bot(token=os.environ["OLIMPO_BOT_TOKEN"]) as bot:
-        await auth.send_otp(tg_id, bot)
+        return await auth.crear_solicitud(tg_id, bot)
 
 
 def _run(coro):
@@ -84,39 +83,59 @@ def _login_screen() -> None:
                 st.error("Todavía no tienes acceso a Olimpo. Escríbele al bot para más info.")
                 return
             try:
-                _run(_send_otp(tg_id))
+                token = _run(_crear_solicitud_login(tg_id))
+            except auth.LoginCooldown:
+                # Ya hay una solicitud vigente para este tg_id (pedida hace
+                # poco) — no hace falta mandar otra, seguimos esperando la
+                # que ya está pendiente en Telegram.
+                token = st.session_state.get("login_token")
+                if not token:
+                    st.error("Ya te mandamos una solicitud hace un momento. Espera unos segundos.")
+                    return
             except Exception:
-                logger.exception("No se pudo enviar el código OTP")
-                st.error("No pudimos enviarte el código. Intenta de nuevo en un momento.")
+                logger.exception("No se pudo enviar la solicitud de acceso")
+                st.error("No pudimos enviarte la solicitud. Intenta de nuevo en un momento.")
                 return
+            st.session_state["login_token"] = token
             st.session_state["pending_tg_id"] = tg_id
-            st.session_state["login_stage"] = "otp"
+            st.session_state["login_stage"] = "esperando"
             st.rerun()
 
-    elif stage == "otp":
-        st.info("Revisa tu Telegram. Te enviamos un código de 6 dígitos.")
-        otp_input = st.text_input("Código OTP", key="otp_input", max_chars=6)
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("Verificar", type="primary"):
-                tg_id = st.session_state["pending_tg_id"]
-                if auth.verify_otp(tg_id, otp_input):
-                    st.session_state["session_expires_at"] = time.time() + SESSION_TTL_SECONDS
-                    st.session_state["tg_id"] = tg_id
-                    st.session_state.pop("login_stage", None)
-                    st.session_state.pop("pending_tg_id", None)
-                    st.rerun()
-                else:
-                    sdk.alertar(
-                        f"🔒 <b>Código OTP inválido</b>\n"
-                        f"👤 <code>{tg_id}</code> ingresó un código incorrecto o vencido."
-                    )
-                    st.error("Código incorrecto o expirado.")
-        with col2:
-            if st.button("Cancelar"):
-                st.session_state.pop("login_stage", None)
-                st.session_state.pop("pending_tg_id", None)
-                st.rerun()
+    elif stage == "esperando":
+        st.info(
+            "Abre Telegram y toca **✅ Fui yo, entrar** en el mensaje que te "
+            "mandamos. Esta pantalla se actualiza sola."
+        )
+        token = st.session_state.get("login_token")
+        estado = auth.estado_solicitud(token) if token else "not_found"
+
+        if estado == "confirmed":
+            st.session_state["session_expires_at"] = time.time() + SESSION_TTL_SECONDS
+            st.session_state["tg_id"] = st.session_state.pop("pending_tg_id")
+            st.session_state.pop("login_stage", None)
+            st.session_state.pop("login_token", None)
+            st.rerun()
+            return
+
+        if estado in ("denied", "expired", "not_found"):
+            st.session_state.pop("login_stage", None)
+            st.session_state.pop("login_token", None)
+            st.session_state.pop("pending_tg_id", None)
+            if estado == "denied":
+                st.error("Se rechazó el acceso desde Telegram.")
+            else:
+                st.error("La solicitud venció. Vuelve a intentar.")
+            return
+
+        if st.button("Cancelar"):
+            st.session_state.pop("login_stage", None)
+            st.session_state.pop("login_token", None)
+            st.session_state.pop("pending_tg_id", None)
+            st.rerun()
+            return
+
+        time.sleep(2)
+        st.rerun()
 
 
 def _modulos_admin_screen(user_id: int) -> None:

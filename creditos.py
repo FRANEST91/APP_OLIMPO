@@ -30,13 +30,20 @@ def asignar(user_id: int, cantidad: int, motivo: str = "Asignado por admin") -> 
 
 
 def descontar(user_id: int, cantidad: int, motivo: str) -> bool:
-    """Descuenta créditos de forma atómica. False si el saldo no alcanza."""
+    """Descuenta créditos de forma atómica. False si el saldo no alcanza.
+
+    El WHERE saldo >= ? hace que el chequeo y el descuento sean un solo
+    UPDATE — si dos compras del mismo usuario llegan casi juntas (doble
+    clic, dos pestañas), un SELECT + UPDATE separados dejarían pasar a
+    las dos con el mismo saldo leído y el saldo terminaría en negativo.
+    """
     with get_conn() as conn:
-        row = conn.execute("SELECT saldo FROM creditos WHERE user_id = ?", (user_id,)).fetchone()
-        saldo_actual = row["saldo"] if row else 0
-        if saldo_actual < cantidad:
+        cur = conn.execute(
+            "UPDATE creditos SET saldo = saldo - ? WHERE user_id = ? AND saldo >= ?",
+            (cantidad, user_id, cantidad),
+        )
+        if cur.rowcount == 0:
             return False
-        conn.execute("UPDATE creditos SET saldo = saldo - ? WHERE user_id = ?", (cantidad, user_id))
         _registrar_movimiento(conn, user_id, -cantidad, motivo)
     return True
 

@@ -25,6 +25,15 @@ Edita `.env` con los valores reales (`OLIMPO_BOT_TOKEN`, `OLIMPO_ADMINS`,
 ya lo fuerza a `/app/data/olimpo.db`, dentro del volumen persistente
 `olimpo_data`.
 
+Los contenedores corren como usuario sin privilegios (uid 1000), no como
+root. `external_modules/` se comparte por bind mount desde el host, así
+que necesita ser escribible por ese uid:
+
+```bash
+mkdir -p external_modules
+sudo chown 1000:1000 external_modules
+```
+
 ## 3. Levantar los servicios
 
 ```bash

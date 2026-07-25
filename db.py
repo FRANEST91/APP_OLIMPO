@@ -87,6 +87,14 @@ CREATE TABLE IF NOT EXISTS sdk_modulo_config (
     value      TEXT NOT NULL,
     PRIMARY KEY (module_id, key)
 );
+
+CREATE TABLE IF NOT EXISTS login_requests (
+    token       TEXT PRIMARY KEY,
+    tg_id       INTEGER NOT NULL,
+    status      TEXT NOT NULL DEFAULT 'pending',
+    created_at  TEXT NOT NULL,
+    expires_at  TEXT NOT NULL
+);
 """
 
 
