@@ -103,6 +103,13 @@ CREATE TABLE IF NOT EXISTS sesiones (
     created_at  TEXT NOT NULL,
     expires_at  TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS configuracion (
+    key         TEXT PRIMARY KEY,
+    valor       BLOB NOT NULL,
+    mime_type   TEXT NOT NULL,
+    updated_at  TEXT NOT NULL
+);
 """
 
 

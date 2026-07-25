@@ -402,6 +402,7 @@ def render(user_id: int) -> None:
             resultado = check_sms(order["order_id"])
         if resultado.get("sms"):
             order["sms"] = resultado["sms"]
+            order["sonido_pendiente"] = True
             st.session_state[estado_key] = order
             _notificar_codigo(
                 user_id, order["order_id"], order["number"],
@@ -422,6 +423,13 @@ def render(user_id: int) -> None:
     st.code(order["number"], language=None)
 
     if order.get("sms"):
+        if order.pop("sonido_pendiente", False):
+            # Se consume acá, no en el momento en que llegó el código: si
+            # sonara justo antes de un st.rerun() (como en "Revisar
+            # código" más abajo), Streamlit descarta esa corrida al
+            # instante y el navegador nunca llega a reproducir el audio.
+            st.session_state[estado_key] = order
+            sdk.sonido_exito()
         st.success("Código recibido")
         st.code(order["sms"], language=None)
         if st.button("Nuevo pedido", key=f"{MODULE_ID}_nuevo"):
@@ -437,6 +445,7 @@ def render(user_id: int) -> None:
                 resultado = check_sms(order["order_id"])
                 if resultado.get("sms"):
                     order["sms"] = resultado["sms"]
+                    order["sonido_pendiente"] = True
                     st.session_state[estado_key] = order
                     _notificar_codigo(
                         user_id, order["order_id"], order["number"],

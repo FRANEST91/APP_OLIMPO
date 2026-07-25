@@ -34,6 +34,7 @@ MODULES_DIR = BASE_DIR / "modules"
 EXTERNAL_DIR = BASE_DIR / "external_modules"
 USER_DB_DIR = BASE_DIR / "data" / "modulos"
 SHARED_DB_DIR = BASE_DIR / "data" / "compartidas"
+SONIDO_EXITO_DEFAULT = BASE_DIR / "assets" / "ding.wav"
 
 REQUIRED_ATTRS = ("MODULE_ID", "MODULE_NAME", "render")
 
@@ -122,6 +123,52 @@ def alertar(mensaje: str) -> None:
         asyncio.run(_alertar(destinos, mensaje))
     except Exception:
         log.exception("sdk: no se pudo enviar la alerta")
+
+
+# ---------------------------------------------------------------------------
+# Sonido — ver MODULOS.md sección "Sonido de éxito".
+# ---------------------------------------------------------------------------
+
+def get_sonido_exito() -> tuple[bytes, str]:
+    """(bytes, mime_type) del sonido de éxito actual — el que subió un
+    admin desde Admin > Sonido de éxito, o el de fábrica si no hay
+    ninguno subido."""
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT valor, mime_type FROM configuracion WHERE key = 'sonido_exito'"
+        ).fetchone()
+    if row is not None:
+        return bytes(row["valor"]), row["mime_type"]
+    return SONIDO_EXITO_DEFAULT.read_bytes(), "audio/wav"
+
+
+def set_sonido_exito(contenido: bytes, mime_type: str) -> None:
+    now = datetime.now(timezone.utc).isoformat()
+    with get_conn() as conn:
+        conn.execute(
+            """
+            INSERT INTO configuracion (key, valor, mime_type, updated_at)
+            VALUES ('sonido_exito', ?, ?, ?)
+            ON CONFLICT(key) DO UPDATE SET
+                valor = excluded.valor, mime_type = excluded.mime_type,
+                updated_at = excluded.updated_at
+            """,
+            (contenido, mime_type, now),
+        )
+
+
+def restablecer_sonido_exito() -> None:
+    with get_conn() as conn:
+        conn.execute("DELETE FROM configuracion WHERE key = 'sonido_exito'")
+
+
+def sonido_exito() -> None:
+    """Reproduce el sonido de éxito configurado. Llamala en el momento
+    exacto en que tu módulo detecta que algo salió bien (llegó un código,
+    un mensaje nuevo, etc) — ver MODULOS.md sección "Sonido de éxito"
+    para el patrón de no repetirlo en cada rerun de Streamlit."""
+    contenido, mime_type = get_sonido_exito()
+    st.audio(contenido, format=mime_type, autoplay=True)
 
 
 # ---------------------------------------------------------------------------
