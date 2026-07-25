@@ -397,7 +397,9 @@ Todo esto vive en **Admin > Gestión de módulos**:
   `external_modules/`, fuera de git — así se puede probar sin tocar el
   código versionado. Si el selector de archivos del celular no deja
   elegir el `.py` (pasa en algunos Android/MIUI), hay un campo para
-  pegar el código directo, igual que con el CSV de usuarios.
+  pegar el código directo, igual que con el CSV de usuarios — y si
+  tampoco eso funciona, mandarle el `.py` al bot de Telegram (como
+  admin) hace lo mismo sin pasar por el navegador (`bot_auth.py::on_document`).
 - **Subir el `.py` directo a `modules/` por GitHub** — sin pasar por el
   panel para nada. Si el archivo cumple el contrato, `sdk.descubrir_e_instalar()`
   lo detecta y lo registra solo como **interno** la próxima vez que
