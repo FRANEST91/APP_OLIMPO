@@ -20,6 +20,7 @@ from telegram.ext import (
 )
 
 import auth
+import canal
 import sdk
 
 logging.basicConfig(level=logging.INFO)
@@ -247,6 +248,29 @@ async def on_document(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         await update.message.reply_text(f"✅ Importados: {importados} · Omitidos: {omitidos}")
 
 
+def _es_canal_anuncios(chat) -> bool:
+    configurado = os.getenv("OLIMPO_ANNOUNCE_CHANNEL_ID", "").strip()
+    if not configurado:
+        return False
+    if configurado.startswith("@"):
+        return f"@{(chat.username or '').lower()}" == configurado.lower()
+    return str(chat.id) == configurado
+
+
+async def on_channel_post(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Espeja los posts de texto de OLIMPO_ANNOUNCE_CHANNEL_ID hacia la
+    pestaña "Anuncios" de la app — el bot necesita ser administrador de
+    ese canal para recibir sus posts (requisito de la API de Telegram,
+    no algo que se pueda configurar desde acá)."""
+    post = update.channel_post or update.edited_channel_post
+    if post is None or not _es_canal_anuncios(post.chat):
+        return
+    texto = (post.text or "").strip()
+    if not texto:
+        return  # posts sin texto (solo foto/video/etc) no se reflejan por ahora
+    canal.guardar_mensaje(post.message_id, texto, post.date.isoformat())
+
+
 def main() -> None:
     token = os.environ["OLIMPO_BOT_TOKEN"]
     app = Application.builder().token(token).build()
@@ -257,6 +281,10 @@ def main() -> None:
     app.add_handler(CallbackQueryHandler(on_login_callback, pattern=r"^login_(ok|no):"))
     app.add_handler(CallbackQueryHandler(on_admin_callback, pattern=r"^admin_(kick|ban):"))
     app.add_handler(MessageHandler(filters.Document.ALL, on_document))
+    app.add_handler(MessageHandler(
+        filters.UpdateType.CHANNEL_POST | filters.UpdateType.EDITED_CHANNEL_POST,
+        on_channel_post,
+    ))
     logger.info("OLIMPO auth bot iniciado")
     app.run_polling(allowed_updates=Update.ALL_TYPES)
 

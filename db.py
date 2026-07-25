@@ -110,6 +110,29 @@ CREATE TABLE IF NOT EXISTS configuracion (
     mime_type   TEXT NOT NULL,
     updated_at  TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS canal_mensajes (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    message_id  INTEGER NOT NULL UNIQUE,
+    texto       TEXT NOT NULL,
+    posted_at   TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS paginas (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    titulo      TEXT NOT NULL,
+    emoji       TEXT NOT NULL DEFAULT '📄',
+    contenido   TEXT NOT NULL,
+    active      INTEGER NOT NULL DEFAULT 1,
+    created_at  TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS pestanas_config (
+    tab_key  TEXT PRIMARY KEY,
+    nombre   TEXT,
+    emoji    TEXT,
+    orden    INTEGER NOT NULL DEFAULT 0
+);
 """
 
 

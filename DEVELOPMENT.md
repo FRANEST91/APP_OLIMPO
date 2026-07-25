@@ -70,14 +70,30 @@ Las alertas de seguridad (login rechazado, alguien reenvió el link de
 acceso, cambio de IP en una sesión activa) también traen esos mismos
 botones pegados, para actuar directo desde la alerta.
 
+### Anuncios, páginas y orden de pestañas
+
+- **Anuncios**: si definís `OLIMPO_ANNOUNCE_CHANNEL_ID` en `.env` (ID
+  numérico o `@usuario` de un canal de Telegram donde el bot sea
+  **administrador**), sus posts de texto aparecen en la pestaña
+  "Anuncios", con un refresco automático cada 5 segundos que no
+  interrumpe a nadie usando otra pestaña (`st.fragment`).
+- **Páginas**: desde Admin > Páginas informativas se crean pestañas de
+  contenido estático (markdown) — reglas, FAQ, lo que haga falta.
+- **Orden de pestañas**: también desde Admin, se puede reordenar
+  cualquier pestaña (Inicio, cada módulo, Anuncios, cada página, Admin)
+  y sobreescribir su nombre/emoji, sin tocar código.
+
 ## 4. Estructura del proyecto
 
 | Archivo | Qué hace |
 |---|---|
-| `app.py` | UI de Streamlit: login, TempMail, SMS Pool, Admin |
+| `app.py` | UI de Streamlit: login, tabs de módulos/páginas/anuncios, Admin |
 | `auth.py` | Solicitudes de login por botón, sesiones, whitelist, admins |
 | `db.py` | Schema de SQLite e inicialización |
-| `bot_auth.py` | Bot de Telegram: `/start`, confirmación de login, panel de moderación (`/admin`, `/usuario`) |
+| `bot_auth.py` | Bot de Telegram: `/start`, confirmación de login, panel de moderación (`/admin`, `/usuario`), espejo del canal de anuncios |
+| `canal.py` | Mensajes espejados del canal de Telegram (Anuncios) |
+| `paginas.py` | Páginas de contenido estático (pestañas informativas) |
+| `pestanas.py` | Orden/nombre/emoji configurable de cada pestaña |
 | `modules/tempmail.py` | Wrapper de api.mail.tm |
 | `modules/smspool.py` | Wrapper de api.smspool.net |
 | `modules/_template.py` | Plantilla para módulos nuevos |
@@ -86,20 +102,18 @@ botones pegados, para actuar directo desde la alerta.
 
 1. Copia `modules/_template.py` a `modules/<nombre>.py` y adapta las funciones.
 2. Si necesita guardar datos, agrega una tabla en `db.py` (dentro de `SCHEMA`).
-3. En `app.py`:
-   - Importa el módulo: `from modules import <nombre>`
-   - Escribe una función `_<nombre>_screen(user_id)` con la UI (mismo
-     patrón que `_tempmail_screen` / `_sms_screen`)
-   - Agrégala a la lista `opciones` del sidebar en `main()` y al
-     `if/elif` que decide qué pantalla mostrar
-4. Envuelve las llamadas a APIs externas con `_api_errors("mensaje")`
-   (ya definido en `app.py`), para que un fallo de red muestre un error
-   legible en vez de un traceback crudo.
+3. Definí `MODULE_ID`, `MODULE_NAME` y `render(user_id)` (ver
+   MODULOS.md) — `sdk.descubrir_e_instalar()` lo detecta y registra solo
+   al arrancar la app, no hace falta tocar `app.py` para nada. La pestaña
+   nueva aparece sola (se puede reordenar después desde Admin).
+4. Envolvé las llamadas a APIs externas con `sdk.api_errors("mensaje")`,
+   para que un fallo de red muestre un error legible en vez de un
+   traceback crudo.
 
 ## 6. Antes de subir un cambio
 
 ```bash
-python -m py_compile app.py auth.py db.py bot_auth.py modules/*.py
+python -m py_compile app.py auth.py db.py bot_auth.py canal.py paginas.py pestanas.py modules/*.py
 ```
 
 No hay tests automatizados todavía — probá el flujo a mano en
