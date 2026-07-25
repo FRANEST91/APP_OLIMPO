@@ -21,9 +21,12 @@ import streamlit as st
 from telegram import Bot
 
 import auth
+import canal
 import carrusel
 import creditos
 import db
+import paginas
+import pestanas
 import sdk
 
 st.set_page_config(page_title="OLIMPO", page_icon="🔥", layout="centered")
@@ -612,6 +615,139 @@ def _home_screen() -> None:
     )
 
 
+@st.fragment(run_every="5s")
+def _anuncios_fragment() -> None:
+    # Fragmento aislado: se refresca solo (cada 5s) sin re-ejecutar el
+    # resto de la app — así no interrumpe a alguien completando una
+    # compra de SMS o escribiendo en otra pestaña.
+    mensajes = canal.listar_mensajes()
+    if not mensajes:
+        st.caption("Todavía no hay anuncios.")
+        return
+    for m in mensajes:
+        with st.container(border=True):
+            st.write(m["texto"])
+            st.caption(m["posted_at"])
+
+
+def _anuncios_screen() -> None:
+    st.subheader("📢 Anuncios")
+    _anuncios_fragment()
+
+
+def _pagina_screen(pagina: dict) -> None:
+    st.markdown(pagina["contenido"])
+
+
+def _tabs_meta(user_id: int, modulos_activos: list) -> list[dict]:
+    """Metadata de fábrica de cada pestaña candidata: key estable, nombre,
+    emoji y un orden por defecto. No incluye la función que la renderiza —
+    eso lo resuelve main() por separado, así esta lista también sirve para
+    armar el editor de orden en Admin sin tener que instanciar nada."""
+    metas = [{"key": "inicio", "nombre": "Inicio", "emoji": "🏠", "orden": 0}]
+    for i, (fila, _mod) in enumerate(modulos_activos):
+        metas.append({
+            "key": f"modulo:{fila['module_id']}",
+            "nombre": fila["nombre"], "emoji": "", "orden": 10 + i,
+        })
+    metas.append({"key": "anuncios", "nombre": "Anuncios", "emoji": "📢", "orden": 100})
+    for p in paginas.listar_paginas():
+        metas.append({
+            "key": f"pagina:{p['id']}",
+            "nombre": p["titulo"], "emoji": p["emoji"], "orden": 200 + p["id"],
+        })
+    if auth.is_admin(user_id):
+        metas.append({"key": "admin", "nombre": "Admin", "emoji": "🛡️", "orden": 999})
+    return metas
+
+
+def _aplicar_config_pestanas(metas: list[dict]) -> list[dict]:
+    config = pestanas.get_all_config()
+    resultado = []
+    for m in metas:
+        ov = config.get(m["key"], {})
+        resultado.append({
+            **m,
+            "nombre": ov.get("nombre") or m["nombre"],
+            "emoji": ov.get("emoji") if ov.get("emoji") else m["emoji"],
+            "orden": ov["orden"] if ov.get("orden") is not None else m["orden"],
+        })
+    resultado.sort(key=lambda m: m["orden"])
+    return resultado
+
+
+def _pestanas_admin_screen(user_id: int, modulos_activos: list) -> None:
+    st.markdown("**Páginas informativas**")
+    st.caption("Pestañas de contenido estático (reglas, FAQ, lo que necesites).")
+
+    for p in paginas.listar_paginas(solo_activas=False):
+        with st.container(border=True):
+            col_emoji, col_titulo = st.columns([1, 4])
+            nuevo_emoji = col_emoji.text_input(
+                "Emoji", value=p["emoji"], key=f"pag_emoji_{p['id']}", max_chars=4,
+            )
+            nuevo_titulo = col_titulo.text_input(
+                "Título", value=p["titulo"], key=f"pag_titulo_{p['id']}",
+            )
+            nuevo_contenido = st.text_area(
+                "Contenido (markdown)", value=p["contenido"],
+                key=f"pag_contenido_{p['id']}", height=150,
+            )
+            if (nuevo_emoji, nuevo_titulo, nuevo_contenido) != (p["emoji"], p["titulo"], p["contenido"]):
+                paginas.actualizar_pagina(p["id"], nuevo_titulo, nuevo_emoji, nuevo_contenido)
+
+            col_a, col_b = st.columns(2)
+            etiqueta = "Ocultar" if p["active"] else "Mostrar"
+            if col_a.button(etiqueta, key=f"pag_toggle_{p['id']}", width="stretch"):
+                paginas.toggle_activo(p["id"], not p["active"])
+                st.rerun()
+            if col_b.button("Eliminar", key=f"pag_del_{p['id']}", width="stretch"):
+                paginas.eliminar_pagina(p["id"])
+                st.rerun()
+
+    st.markdown("**Agregar página nueva**")
+    nuevo_emoji_n = st.text_input("Emoji", value="📄", key="pag_nuevo_emoji", max_chars=4)
+    nuevo_titulo_n = st.text_input("Título", key="pag_nuevo_titulo")
+    nuevo_contenido_n = st.text_area("Contenido (markdown)", key="pag_nuevo_contenido", height=150)
+    if st.button("Agregar página"):
+        if not nuevo_titulo_n.strip():
+            st.error("Ponele un título.")
+        else:
+            paginas.agregar_pagina(nuevo_titulo_n.strip(), nuevo_emoji_n.strip(), nuevo_contenido_n)
+            st.success("Página agregada.")
+            st.rerun()
+
+    st.divider()
+    st.markdown("**Orden de pestañas**")
+    st.caption(
+        "Nombre y emoji en blanco = usar el de fábrica. La pestaña con el "
+        "número de orden más chico aparece primero."
+    )
+    metas = _tabs_meta(user_id, modulos_activos)
+    config = pestanas.get_all_config()
+    metas_ordenadas = sorted(metas, key=lambda m: config.get(m["key"], {}).get("orden", m["orden"]))
+    for m in metas_ordenadas:
+        ov = config.get(m["key"], {})
+        with st.container(border=True):
+            col1, col2, col3 = st.columns([1, 3, 1])
+            emoji_in = col1.text_input(
+                "Emoji", value=ov.get("emoji") or "", key=f"pest_emoji_{m['key']}",
+                max_chars=4, placeholder=m["emoji"] or "—",
+            )
+            nombre_in = col2.text_input(
+                "Nombre", value=ov.get("nombre") or "", key=f"pest_nombre_{m['key']}",
+                placeholder=m["nombre"],
+            )
+            orden_in = col3.number_input(
+                "Orden", value=int(ov["orden"]) if ov.get("orden") is not None else m["orden"],
+                key=f"pest_orden_{m['key']}",
+            )
+            if st.button("Guardar", key=f"pest_guardar_{m['key']}"):
+                pestanas.set_config(m["key"], nombre_in.strip(), emoji_in.strip(), int(orden_in))
+                st.success("Guardado.")
+                st.rerun()
+
+
 def main() -> None:
     if not _logged_in():
         _login_screen()
@@ -629,22 +765,34 @@ def main() -> None:
             st.rerun()
 
     modulos_activos = sdk.modulos_activos()
+    mod_por_id = {fila["module_id"]: mod for fila, mod in modulos_activos}
+    nombre_por_modulo_id = {fila["module_id"]: fila["nombre"] for fila, _mod in modulos_activos}
+    paginas_por_id = {p["id"]: p for p in paginas.listar_paginas()}
 
-    nombres = ["Inicio"] + [fila["nombre"] for fila, _mod in modulos_activos]
-    if auth.is_admin(user_id):
-        nombres.append("Admin")
+    metas = _aplicar_config_pestanas(_tabs_meta(user_id, modulos_activos))
+    etiquetas = [f"{m['emoji']} {m['nombre']}".strip() for m in metas]
+    tabs = st.tabs(etiquetas)
 
-    tabs = st.tabs(nombres)
-
-    with tabs[0]:
-        _home_screen()
-    for i, (fila, mod) in enumerate(modulos_activos, start=1):
-        with tabs[i]:
-            with _api_errors(f"Error en el módulo {fila['nombre']}"):
-                mod.render(user_id)
-    if auth.is_admin(user_id):
-        with tabs[-1]:
-            _admin_screen(user_id)
+    for tab, m in zip(tabs, metas):
+        key = m["key"]
+        with tab:
+            if key == "inicio":
+                _home_screen()
+            elif key == "anuncios":
+                _anuncios_screen()
+            elif key == "admin":
+                _admin_screen(user_id)
+                st.divider()
+                _pestanas_admin_screen(user_id, modulos_activos)
+            elif key.startswith("modulo:"):
+                module_id = key.split(":", 1)[1]
+                with _api_errors(f"Error en el módulo {nombre_por_modulo_id[module_id]}"):
+                    mod_por_id[module_id].render(user_id)
+            elif key.startswith("pagina:"):
+                pagina_id = int(key.split(":", 1)[1])
+                pagina = paginas_por_id.get(pagina_id)
+                if pagina is not None:
+                    _pagina_screen(pagina)
 
 
 if __name__ == "__main__":
