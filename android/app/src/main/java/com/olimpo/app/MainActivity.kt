@@ -69,22 +69,17 @@ class MainActivity : AppCompatActivity() {
                 filePathCallback?.onReceiveValue(null)
                 filePathCallback = callback
 
-                // params.createIntent() arma un filtro MIME estricto a partir
-                // del accept="..." del <input>. Muchos gestores de archivos
-                // (y CSVs en particular) no reportan un MIME type que calce
-                // con ese filtro exacto, así que el archivo queda gris o
-                // directamente no aparece. Se usa "*/*" como tipo real (deja
-                // ver y elegir cualquier archivo) y los tipos originales solo
-                // como sugerencia vía EXTRA_MIME_TYPES, que la mayoría de los
-                // gestores tratan como filtro rápido opcional, no un bloqueo.
+                // El accept="..." del <input> (ej. ".csv") llega en
+                // params.acceptTypes como extensión literal, no como MIME
+                // type real (text/csv). Pasar eso en EXTRA_MIME_TYPES no lo
+                // trata todo gestor de archivos como sugerencia descartable:
+                // en algunos (MIUI incluido) corta la selección entera y
+                // cancela sin mostrar ningún archivo. "*/*" alcanza como
+                // único filtro — deja ver y elegir cualquier archivo.
                 val intent = Intent(Intent.ACTION_GET_CONTENT).apply {
                     type = "*/*"
                     addCategory(Intent.CATEGORY_OPENABLE)
                     putExtra(Intent.EXTRA_ALLOW_MULTIPLE, params?.mode == FileChooserParams.MODE_OPEN_MULTIPLE)
-                    val tipos = params?.acceptTypes?.filter { it.isNotBlank() }?.toTypedArray()
-                    if (!tipos.isNullOrEmpty()) {
-                        putExtra(Intent.EXTRA_MIME_TYPES, tipos)
-                    }
                 }
 
                 return try {
