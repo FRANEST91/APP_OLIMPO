@@ -31,6 +31,93 @@ import sdk
 
 st.set_page_config(page_title="OLIMPO", page_icon="🔥", layout="centered")
 
+# Streamlit no tiene un modo "tabs abajo" nativo — esto reposiciona el
+# tablist real (data-testid="stTabs") como una barra de navegación fija al
+# pie, estilo app mobile, y anima el emoji de fuego del título.
+#
+# Se probó primero reforzar el position:fixed con JS (MutationObserver +
+# reaplicar estilos), porque el CSS solo a veces perdía la pulseada de
+# especificidad contra el estilo propio de Streamlit tras un rerender.
+# Se descartó: bajo ciertas combinaciones de mutaciones esa solución podía
+# entrar en un bucle que colgaba la pestaña — un riesgo inaceptable frente
+# a, en el peor caso, que la barra tarde un instante en reposicionarse.
+# Por eso queda solo CSS con !important, que en las pruebas se sostuvo
+# bien en el uso normal (cambiar de pestaña, scrollear contenido largo).
+# Probado contra el DOM real de streamlit==1.60.0; si se actualiza
+# Streamlit y esto deja de verse bien, lo primero a revisar son los
+# data-testid, que podrían renombrarse entre versiones.
+st.markdown(
+    """
+    <style>
+    @keyframes olimpo-flame-flicker {
+        0%   { transform: scale(1) rotate(-3deg); filter: brightness(1) drop-shadow(0 0 4px #FF6030); }
+        20%  { transform: scale(1.08) rotate(2deg); filter: brightness(1.2) drop-shadow(0 0 8px #FF6030); }
+        40%  { transform: scale(0.95) rotate(-2deg); filter: brightness(0.9) drop-shadow(0 0 3px #FF6030); }
+        60%  { transform: scale(1.05) rotate(3deg); filter: brightness(1.15) drop-shadow(0 0 7px #FF6030); }
+        80%  { transform: scale(0.98) rotate(-1deg); filter: brightness(1.05) drop-shadow(0 0 5px #FF6030); }
+        100% { transform: scale(1) rotate(-3deg); filter: brightness(1) drop-shadow(0 0 4px #FF6030); }
+    }
+    .olimpo-flame {
+        display: inline-block;
+        animation: olimpo-flame-flicker 1.6s ease-in-out infinite;
+        transform-origin: 50% 90%;
+    }
+
+    /* Menos margen arriba del todo y lugar abajo para la barra fija */
+    div[data-testid="stMainBlockContainer"] {
+        padding-top: 1.2rem;
+        padding-bottom: 5.5rem;
+    }
+    div[data-testid="stHeader"] { height: 0; }
+
+    /* --- Tabs como barra de navegación inferior fija --- */
+    div[data-testid="stTabs"] div[role="tablist"] {
+        position: fixed !important;
+        bottom: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        top: auto !important;
+        z-index: 999;
+        background: #0E0600;
+        border-top: 1px solid #6B1800;
+        display: flex !important;
+        justify-content: space-around;
+        padding: 8px 4px calc(8px + env(safe-area-inset-bottom));
+        gap: 0;
+        overflow: visible !important;
+        margin: 0 !important;
+    }
+    div[data-testid="stTabs"] div[role="tablist"] [data-testid="stTab"] {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 2px;
+        background: transparent !important;
+        border: none !important;
+        padding: 4px 2px !important;
+    }
+    div[data-testid="stTabs"] div[role="tablist"] [data-testid="stTab"] p {
+        white-space: pre-line;
+        text-align: center;
+        font-size: 0.68rem;
+        line-height: 1.15;
+        margin: 0;
+        color: #8A6A50;
+    }
+    div[data-testid="stTabs"] div[role="tablist"] [data-testid="stTab"][aria-selected="true"] p {
+        color: #FF6030;
+        font-weight: 700;
+    }
+    div[data-testid="stTabs"] .react-aria-SelectionIndicator {
+        display: none;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("olimpo.app")
 
@@ -639,6 +726,21 @@ def _pagina_screen(pagina: dict) -> None:
     st.markdown(pagina["contenido"])
 
 
+def _icono_y_texto(nombre: str, emoji: str) -> str:
+    """Arma la etiqueta de una pestaña con el emoji en su propia línea —
+    la barra de navegación inferior (CSS de arriba) fuerza el salto de
+    línea para que quede ícono arriba, texto abajo, como una app mobile."""
+    if emoji:
+        return f"{emoji}\n{nombre}".strip()
+    # Los módulos ya traen su propio emoji embebido en el nombre (p.ej.
+    # "📱 Números SMS", ver MODULE_NAME en MODULOS.md) — se separa del
+    # resto por la primera palabra no-ascii.
+    partes = nombre.split(" ", 1)
+    if len(partes) == 2 and not partes[0].isascii():
+        return f"{partes[0]}\n{partes[1]}"
+    return nombre
+
+
 def _tabs_meta(user_id: int, modulos_activos: list) -> list[dict]:
     """Metadata de fábrica de cada pestaña candidata: key estable, nombre,
     emoji y un orden por defecto. No incluye la función que la renderiza —
@@ -757,7 +859,7 @@ def main() -> None:
 
     col_titulo, col_salir = st.columns([4, 1])
     with col_titulo:
-        st.markdown("## 🔥 OLIMPO")
+        st.markdown('<h2><span class="olimpo-flame">🔥</span> OLIMPO</h2>', unsafe_allow_html=True)
     with col_salir:
         if st.button("Salir"):
             auth.cerrar_sesion(user_id)
@@ -770,7 +872,7 @@ def main() -> None:
     paginas_por_id = {p["id"]: p for p in paginas.listar_paginas()}
 
     metas = _aplicar_config_pestanas(_tabs_meta(user_id, modulos_activos))
-    etiquetas = [f"{m['emoji']} {m['nombre']}".strip() for m in metas]
+    etiquetas = [_icono_y_texto(m["nombre"], m["emoji"]) for m in metas]
     tabs = st.tabs(etiquetas)
 
     for tab, m in zip(tabs, metas):
