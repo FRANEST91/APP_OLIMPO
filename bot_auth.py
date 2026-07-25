@@ -1,5 +1,8 @@
+import csv
+import io
 import logging
 import os
+import re
 
 from dotenv import load_dotenv
 
@@ -7,9 +10,17 @@ load_dotenv()
 
 from telegram import Update
 from telegram.constants import ParseMode
-from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes
+from telegram.ext import (
+    Application,
+    CallbackQueryHandler,
+    CommandHandler,
+    ContextTypes,
+    MessageHandler,
+    filters,
+)
 
 import auth
+import sdk
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("olimpo.bot_auth")
@@ -180,6 +191,62 @@ async def usuario_lookup(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     await update.message.reply_html(_resumen_usuario(tg_id), reply_markup=auth.teclado_moderacion(tg_id))
 
 
+def _module_id_from_filename(nombre: str) -> str:
+    stem = nombre.rsplit(".", 1)[0].strip().lower()
+    stem = re.sub(r"[^a-z0-9_]", "_", stem)
+    return stem.strip("_")
+
+
+async def on_document(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Manda un .py al bot para agregarlo como módulo externo, o un .csv
+    para importarlo a la whitelist — mismo resultado que subirlo desde el
+    panel Admin, sin depender del selector de archivos del navegador (en
+    varios celulares no reconoce estas extensiones y las deja en gris)."""
+    if not auth.is_admin(update.effective_user.id):
+        return  # silencio, mismo criterio que /admin y /usuario
+
+    documento = update.message.document
+    nombre = documento.file_name or ""
+    extension = nombre.rsplit(".", 1)[-1].lower() if "." in nombre else ""
+
+    if extension not in ("py", "csv"):
+        await update.message.reply_text(
+            "Solo acepto .py (módulo externo) o .csv (importar usuarios a la whitelist)."
+        )
+        return
+
+    archivo = await documento.get_file()
+    contenido = bytes(await archivo.download_as_bytearray())
+
+    if extension == "py":
+        module_id = _module_id_from_filename(nombre)
+        if not module_id:
+            await update.message.reply_text(
+                "No pude armar un ID de módulo válido a partir del nombre del "
+                "archivo — renómbralo (letras, números, guion bajo) y volvé a mandarlo."
+            )
+            return
+        try:
+            sdk.registrar_externo(module_id, contenido)
+        except Exception as exc:
+            logger.exception("No se pudo registrar el módulo %s desde Telegram", module_id)
+            await update.message.reply_text(f"No se pudo agregar el módulo: {exc}")
+        else:
+            await update.message.reply_text(f"✅ Módulo '{module_id}' agregado como externo.")
+        return
+
+    # extension == "csv"
+    try:
+        texto = contenido.decode("utf-8")
+        filas = list(csv.DictReader(io.StringIO(texto)))
+        importados, omitidos = auth.import_csv(filas, update.effective_user.id)
+    except Exception as exc:
+        logger.exception("No se pudo importar el CSV desde Telegram")
+        await update.message.reply_text(f"No se pudo importar el CSV: {exc}")
+    else:
+        await update.message.reply_text(f"✅ Importados: {importados} · Omitidos: {omitidos}")
+
+
 def main() -> None:
     token = os.environ["OLIMPO_BOT_TOKEN"]
     app = Application.builder().token(token).build()
@@ -189,6 +256,7 @@ def main() -> None:
     app.add_handler(CommandHandler("usuario", usuario_lookup))
     app.add_handler(CallbackQueryHandler(on_login_callback, pattern=r"^login_(ok|no):"))
     app.add_handler(CallbackQueryHandler(on_admin_callback, pattern=r"^admin_(kick|ban):"))
+    app.add_handler(MessageHandler(filters.Document.ALL, on_document))
     logger.info("OLIMPO auth bot iniciado")
     app.run_polling(allowed_updates=Update.ALL_TYPES)
 

@@ -60,6 +60,12 @@ Como admin (tu ID en `OLIMPO_ADMINS`) tenés dos comandos extra en el bot:
 - `/usuario <telegram_id>` — lo mismo para un usuario puntual, aunque no
   haya saltado ninguna alerta todavía.
 
+Mandarle un archivo al bot como admin también funciona (evita depender del
+selector de archivos del navegador, poco confiable con `.py`/`.csv` en
+varios celulares): un `.py` se agrega como módulo externo, un `.csv` se
+importa a la whitelist. El nombre del archivo define el ID del módulo
+(minúsculas, solo letras/números/guion bajo).
+
 Las alertas de seguridad (login rechazado, alguien reenvió el link de
 acceso, cambio de IP en una sesión activa) también traen esos mismos
 botones pegados, para actuar directo desde la alerta.
