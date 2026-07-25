@@ -94,6 +94,12 @@ CREATE TABLE IF NOT EXISTS sdk_modulo_config (
 def get_conn():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
+    # WAL: la app web y el bot de Telegram son dos procesos distintos
+    # escribiendo a la misma DB — sin esto, SQLite tira "database is
+    # locked" bajo uso concurrente. busy_timeout hace que una escritura
+    # que choca con otra espere en vez de fallar al toque.
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=5000")
     try:
         yield conn
         conn.commit()
