@@ -116,6 +116,127 @@ def resolver_solicitud(token: str, presser_tg_id: int, aceptar: bool) -> tuple[s
     return "ok", row["tg_id"]
 
 
+SESSION_TTL_SECONDS = 60 * 60
+
+
+def abrir_sesion(tg_id: int, session_id: str, ip: str | None, ttl_seconds: int = SESSION_TTL_SECONDS) -> bool:
+    """Registra la sesión activa de tg_id, reemplazando cualquier otra que
+    hubiera (una sola sesión activa por cuenta a la vez — dos personas ya
+    no pueden usar la misma cuenta al mismo tiempo sin que se note).
+
+    Devuelve True si había otra sesión vigente (para poder avisarle al
+    dueño que se cerró)."""
+    ahora = datetime.now(timezone.utc)
+    expira = ahora + timedelta(seconds=ttl_seconds)
+    with get_conn() as conn:
+        anterior = conn.execute(
+            "SELECT expires_at FROM sesiones WHERE tg_id = ?", (tg_id,)
+        ).fetchone()
+        habia_otra = bool(
+            anterior and datetime.fromisoformat(anterior["expires_at"]) > ahora
+        )
+        conn.execute(
+            """
+            INSERT INTO sesiones (tg_id, session_id, ip, created_at, expires_at)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(tg_id) DO UPDATE SET
+                session_id = excluded.session_id, ip = excluded.ip,
+                created_at = excluded.created_at, expires_at = excluded.expires_at
+            """,
+            (tg_id, session_id, ip, ahora.isoformat(), expira.isoformat()),
+        )
+    return habia_otra
+
+
+def sesion_vigente(tg_id: int, session_id: str) -> bool:
+    """False si otra sesión reemplazó a esta (login desde otro lado), si un
+    admin la cerró a mano, o si venció."""
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT session_id, expires_at FROM sesiones WHERE tg_id = ?", (tg_id,)
+        ).fetchone()
+    if row is None or row["session_id"] != session_id:
+        return False
+    return datetime.fromisoformat(row["expires_at"]) > datetime.now(timezone.utc)
+
+
+def cerrar_sesion(tg_id: int) -> None:
+    with get_conn() as conn:
+        conn.execute("DELETE FROM sesiones WHERE tg_id = ?", (tg_id,))
+
+
+def listar_sesiones_activas() -> list:
+    with get_conn() as conn:
+        return [
+            dict(r) for r in conn.execute(
+                "SELECT * FROM sesiones WHERE expires_at > ? ORDER BY created_at DESC",
+                (datetime.now(timezone.utc).isoformat(),),
+            )
+        ]
+
+
+def sesion_de(tg_id: int) -> dict | None:
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM sesiones WHERE tg_id = ? AND expires_at > ?",
+            (tg_id, datetime.now(timezone.utc).isoformat()),
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def registrar_ip_si_cambio(tg_id: int, session_id: str, ip: str | None) -> bool:
+    """Actualiza la IP guardada de la sesión si cambió respecto a la última
+    vista. Devuelve True solo cuando de verdad cambió (para disparar el
+    aviso una sola vez por cambio, no en cada rerun de la pestaña)."""
+    if not ip:
+        return False
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT ip FROM sesiones WHERE tg_id = ? AND session_id = ?",
+            (tg_id, session_id),
+        ).fetchone()
+        if row is None or row["ip"] == ip:
+            return False
+        conn.execute(
+            "UPDATE sesiones SET ip = ? WHERE tg_id = ? AND session_id = ?",
+            (ip, tg_id, session_id),
+        )
+        cambio_real = row["ip"] is not None
+    return cambio_real
+
+
+def teclado_moderacion(tg_id: int) -> InlineKeyboardMarkup:
+    """Botones de "🚫 Cerrar sesión" / "⛔ Revocar membresía" para pegar en
+    cualquier alerta relacionada con un tg_id — así el admin actúa desde el
+    mismo mensaje de la alerta, sin tener que ir a buscar al usuario."""
+    return InlineKeyboardMarkup([[
+        InlineKeyboardButton("🚫 Cerrar sesión", callback_data=f"admin_kick:{tg_id}"),
+        InlineKeyboardButton("⛔ Revocar membresía", callback_data=f"admin_ban:{tg_id}"),
+    ]])
+
+
+async def alertar_moderacion(bot: Bot, tg_id: int, mensaje: str) -> None:
+    """Como sdk.alertar(), pero con los botones de moderación pegados —
+    pensada para comportamiento sospechoso sobre un tg_id puntual, no para
+    el log de rutina de cada módulo (esos no necesitan acción inmediata).
+
+    Recibe el Bot ya abierto en vez de crear uno (a diferencia de
+    sdk.alertar): se llama tanto desde app.py, que corre asyncio.run() por
+    fuera, como desde bot_auth.py, que ya está corriendo dentro de un
+    event loop — ahí un asyncio.run() propio tiraría error.
+    """
+    canal = os.getenv("OLIMPO_LOG_CHANNEL_ID")
+    destinos = [canal] if canal else list_admin_ids()
+    teclado = teclado_moderacion(tg_id)
+    for chat_id in destinos:
+        try:
+            await bot.send_message(
+                chat_id=chat_id, text=mensaje, parse_mode=ParseMode.HTML, reply_markup=teclado,
+            )
+        except Exception:
+            pass
+
+
 def list_admin_ids() -> list[int]:
     ids = []
     for raw in os.getenv("OLIMPO_ADMINS", "").split(","):

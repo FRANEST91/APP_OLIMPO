@@ -95,6 +95,14 @@ CREATE TABLE IF NOT EXISTS login_requests (
     created_at  TEXT NOT NULL,
     expires_at  TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS sesiones (
+    tg_id       INTEGER PRIMARY KEY,
+    session_id  TEXT NOT NULL,
+    ip          TEXT,
+    created_at  TEXT NOT NULL,
+    expires_at  TEXT NOT NULL
+);
 """
 
 

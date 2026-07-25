@@ -53,14 +53,25 @@ aparte, en otra terminal, antes de intentar entrar a la app:
 python bot_auth.py
 ```
 
+Como admin (tu ID en `OLIMPO_ADMINS`) tenés dos comandos extra en el bot:
+
+- `/admin` — lista las sesiones activas en este momento, con botones para
+  cerrar cualquiera o revocar la membresía de esa cuenta.
+- `/usuario <telegram_id>` — lo mismo para un usuario puntual, aunque no
+  haya saltado ninguna alerta todavía.
+
+Las alertas de seguridad (login rechazado, alguien reenvió el link de
+acceso, cambio de IP en una sesión activa) también traen esos mismos
+botones pegados, para actuar directo desde la alerta.
+
 ## 4. Estructura del proyecto
 
 | Archivo | Qué hace |
 |---|---|
 | `app.py` | UI de Streamlit: login, TempMail, SMS Pool, Admin |
-| `auth.py` | Solicitudes de login por botón, whitelist, admins |
+| `auth.py` | Solicitudes de login por botón, sesiones, whitelist, admins |
 | `db.py` | Schema de SQLite e inicialización |
-| `bot_auth.py` | Bot de Telegram: `/start` con el Telegram ID + botones de confirmación de login |
+| `bot_auth.py` | Bot de Telegram: `/start`, confirmación de login, panel de moderación (`/admin`, `/usuario`) |
 | `modules/tempmail.py` | Wrapper de api.mail.tm |
 | `modules/smspool.py` | Wrapper de api.smspool.net |
 | `modules/_template.py` | Plantilla para módulos nuevos |
