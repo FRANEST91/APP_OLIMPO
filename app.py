@@ -713,7 +713,10 @@ def _anuncios_fragment() -> None:
         return
     for m in mensajes:
         with st.container(border=True):
-            st.write(m["texto"])
+            # st.text y no st.write: un post de texto plano con un guion
+            # bajo o un asterisco suelto ("reunión_importante") no debería
+            # interpretarse como sintaxis Markdown.
+            st.text(m["texto"])
             st.caption(m["posted_at"])
 
 
