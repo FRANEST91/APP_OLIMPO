@@ -88,7 +88,7 @@ async def _enviar_dm(chat_id: int, texto: str) -> None:
 
 def enviar_telegram(user_id: int, texto: str) -> None:
     """Manda un DM de Telegram a un usuario a través del bot de OLIMPO.
-    Úsalo para entregarle algo importante (un código OTP, la confirmación
+    Úsalo para entregarle algo importante (un código recibido, la confirmación
     de una compra) además de mostrarlo en la UI — así le queda un respaldo
     aunque cierre la pestaña o se le venza la sesión web. Si el envío
     falla (por ejemplo, el usuario nunca le escribió al bot) no rompe tu
@@ -267,7 +267,7 @@ def guardar_archivo_modulo(module_id: str, nombre_archivo: str, contenido: bytes
 
 
 def eliminar_archivo_modulo(module_id: str, nombre_archivo: str) -> None:
-    (module_dir(module_id) / nombre_archivo).unlink(missing_ok=True)
+    (module_dir(module_id) / Path(nombre_archivo).name).unlink(missing_ok=True)
 
 
 # ---------------------------------------------------------------------------
