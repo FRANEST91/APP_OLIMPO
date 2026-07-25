@@ -262,6 +262,16 @@ def render(user_id: int) -> None:
         with sdk.api_errors("No se pudo cargar la bandeja"):
             with st.spinner("Cargando mensajes..."):
                 mensajes = ver_bandeja(user_id)
+
+        # "seen" lo marca la API de mail.tm (persiste entre reruns, a
+        # diferencia de session_state) — solo suena para mensajes que
+        # todavía no se marcaron como leídos Y que esta pestaña no
+        # notificó ya, para no repetir el sonido en cada rerun.
+        vistos = st.session_state.setdefault(f"{MODULE_ID}_sonidos_vistos", set())
+        if any(not m["seen"] and m["id"] not in vistos for m in mensajes):
+            sdk.sonido_exito()
+        vistos.update(m["id"] for m in mensajes)
+
         if not mensajes:
             st.write("Bandeja vacía.")
         for m in mensajes:

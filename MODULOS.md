@@ -382,6 +382,37 @@ También se usa para intentos de acceso fallidos a la app en sí (ver
 `bot_auth.py::on_login_callback` — alguien rechazó una solicitud de
 login), aunque eso no es parte de ningún módulo puntual.
 
+### Sonido de éxito
+
+```python
+sdk.sonido_exito()
+```
+
+Reproduce el sonido configurado en Admin > Sonido de éxito (o el de
+fábrica si nadie subió uno propio). Llamala en el momento exacto en que
+tu módulo detecta que algo salió bien — un código que llegó, un mensaje
+nuevo, lo que sea que en tu módulo cuenta como "éxito".
+
+Dos cosas a las que hay que prestar atención, las dos por cómo funciona
+Streamlit (reejecuta todo el script en cada rerun):
+
+- **No la llames en cada rerun de una condición que sigue siendo
+  verdadera** — solo en la transición real de "no había pasado" a "acaba
+  de pasar". Si tu módulo guarda estado en `st.session_state` (como
+  `smspool.py` con `order`), marcá una bandera tipo
+  `"sonido_pendiente": True` en el momento del evento, y consumila
+  (`pop`) recién en el render que muestra el resultado — no antes de un
+  `st.rerun()` inmediato. Para eventos que se detectan comparando contra
+  el estado anterior (como "mensaje nuevo" en `tempmail.py`), guardá los
+  IDs ya vistos en `st.session_state` y solo sonás para los que no estén
+  ahí todavía.
+- **No la llames justo antes de un `st.rerun()`** — Streamlit descarta
+  esa corrida al instante y el navegador nunca llega a reproducir el
+  audio. Llamala en el render que de verdad persiste en pantalla.
+
+`modules/smspool.py` (bandera `sonido_pendiente`) y `modules/tempmail.py`
+(set de IDs vistos) son las dos referencias, una para cada patrón.
+
 ---
 
 ## 8. Cómo se gestiona un módulo (panel Admin)

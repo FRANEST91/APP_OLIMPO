@@ -506,6 +506,29 @@ def _admin_screen(user_id: int) -> None:
                 st.rerun()
 
     st.divider()
+    st.markdown("**Sonido de éxito**")
+    st.caption(
+        "Se reproduce cuando un módulo señala que algo salió bien (código "
+        "SMS recibido, correo nuevo, etc — sdk.sonido_exito() en MODULOS.md)."
+    )
+    sonido_actual, sonido_mime = sdk.get_sonido_exito()
+    st.audio(sonido_actual, format=sonido_mime)
+
+    nuevo_sonido = st.file_uploader(
+        "Reemplazar sonido", type=["mp3", "wav", "ogg"], key="admin_sonido_upload",
+    )
+    col_guardar, col_restablecer = st.columns(2)
+    if nuevo_sonido is not None and col_guardar.button("Guardar sonido", width="stretch"):
+        with _api_errors("No se pudo guardar el sonido"):
+            sdk.set_sonido_exito(nuevo_sonido.getvalue(), nuevo_sonido.type)
+            st.success("Sonido actualizado.")
+            st.rerun()
+    if col_restablecer.button("Restablecer al de fábrica", width="stretch"):
+        sdk.restablecer_sonido_exito()
+        st.success("Sonido restablecido.")
+        st.rerun()
+
+    st.divider()
     _bases_compartidas_admin_screen(user_id)
 
     st.divider()
