@@ -13,7 +13,7 @@ import androidx.activity.addCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 
-private const val OLIMPO_URL = "https://olimpoapk-production.up.railway.app"
+private const val OLIMPO_URL = "https://ofertaspotify.com"
 
 class MainActivity : AppCompatActivity() {
 
