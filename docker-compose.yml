@@ -1,0 +1,30 @@
+services:
+  web:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # Fuerza la DB dentro del volumen persistente, sin importar lo que
+      # diga .env — si no, un `docker compose up` sin este override podría
+      # crear la DB en /app (se pierde al reconstruir la imagen).
+      OLIMPO_DB_PATH: /app/data/olimpo.db
+    ports:
+      - "127.0.0.1:8501:8501"
+    volumes:
+      - olimpo_data:/app/data
+      - ./external_modules:/app/external_modules
+    command: streamlit run app.py --server.port=8501 --server.address=0.0.0.0
+
+  bot:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      OLIMPO_DB_PATH: /app/data/olimpo.db
+    volumes:
+      - olimpo_data:/app/data
+      - ./external_modules:/app/external_modules
+    command: python bot_auth.py
+
+volumes:
+  olimpo_data:

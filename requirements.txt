@@ -1,6 +1,6 @@
-streamlit
-python-telegram-bot==20.*
-aiohttp
-requests
-faker
-python-dotenv
+streamlit==1.60.0
+python-telegram-bot==20.8
+aiohttp==3.14.3
+requests==2.34.2
+faker==40.36.0
+python-dotenv==1.2.2

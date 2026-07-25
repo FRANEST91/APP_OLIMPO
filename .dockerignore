@@ -1,0 +1,15 @@
+.git
+.gitignore
+.github
+.venv
+__pycache__
+*.pyc
+*.db
+.env
+.env.example
+android
+data
+external_modules
+DEVELOPMENT.md
+MODULOS.md
+olimpomaster.html
