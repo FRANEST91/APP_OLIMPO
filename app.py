@@ -89,7 +89,16 @@ def _logged_in() -> bool:
     if not tg_id or not session_id or not auth.sesion_vigente(tg_id, session_id):
         # Otra sesión de la misma cuenta la reemplazó, o un admin la cerró
         # a mano desde el bot — no seguimos con una sesión que ya no vale.
+        # Sin este mensaje, la pestaña vuelve al login sin ninguna
+        # explicación y parece que la app falló.
+        motivo = (
+            "Tu sesión se cerró — iniciaste sesión desde otro lugar, o un "
+            "admin la cerró. Vuelve a entrar."
+            if tg_id else None
+        )
         st.session_state.clear()
+        if motivo:
+            st.session_state["_logout_reason"] = motivo
         return False
 
     ip_actual = _client_ip()
@@ -109,6 +118,10 @@ def _logged_in() -> bool:
 
 
 def _login_screen() -> None:
+    motivo_logout = st.session_state.pop("_logout_reason", None)
+    if motivo_logout:
+        st.warning(motivo_logout)
+
     st.markdown("## 🔥 OLIMPO")
     st.caption("Ingresa tu Telegram ID para continuar")
 
