@@ -6,6 +6,7 @@ import io
 import json
 import logging
 import os
+import secrets
 import time
 from contextlib import contextmanager
 from pathlib import Path
@@ -44,6 +45,11 @@ async def _crear_solicitud_login(tg_id: int) -> str:
         return await auth.crear_solicitud(tg_id, bot)
 
 
+async def _notificar_moderacion(tg_id: int, mensaje: str) -> None:
+    async with Bot(token=os.environ["OLIMPO_BOT_TOKEN"]) as bot:
+        await auth.alertar_moderacion(bot, tg_id, mensaje)
+
+
 def _run(coro):
     return asyncio.run(coro)
 
@@ -57,9 +63,49 @@ def _api_errors(mensaje: str):
         st.error(f"{mensaje}. Intenta de nuevo en un momento.")
 
 
+def _client_ip() -> str | None:
+    # nginx pasa la IP real en X-Forwarded-For (ver deploy/olimpo.nginx.conf)
+    # — sin proxy delante (dev local), Streamlit no expone la IP del cliente
+    # de otra forma más confiable que esta.
+    try:
+        headers = st.context.headers
+    except Exception:
+        return None
+    if not headers:
+        return None
+    forwarded = headers.get("X-Forwarded-For")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return headers.get("X-Real-IP") or None
+
+
 def _logged_in() -> bool:
     expires_at = st.session_state.get("session_expires_at")
-    return bool(expires_at and time.time() < expires_at)
+    if not (expires_at and time.time() < expires_at):
+        return False
+
+    tg_id = st.session_state.get("tg_id")
+    session_id = st.session_state.get("session_id")
+    if not tg_id or not session_id or not auth.sesion_vigente(tg_id, session_id):
+        # Otra sesión de la misma cuenta la reemplazó, o un admin la cerró
+        # a mano desde el bot — no seguimos con una sesión que ya no vale.
+        st.session_state.clear()
+        return False
+
+    ip_actual = _client_ip()
+    if ip_actual and auth.registrar_ip_si_cambio(tg_id, session_id, ip_actual):
+        try:
+            _run(_notificar_moderacion(
+                tg_id,
+                "🌐 <b>Cambio de IP en una sesión activa</b>\n"
+                f"👤 <code>{tg_id}</code>\n"
+                f"Nueva IP: <code>{ip_actual}</code>\n"
+                "Si no sos vos en otra red, revisa la cuenta."
+            ))
+        except Exception:
+            logger.exception("No se pudo avisar del cambio de IP")
+
+    return True
 
 
 def _login_screen() -> None:
@@ -110,10 +156,28 @@ def _login_screen() -> None:
         estado = auth.estado_solicitud(token) if token else "not_found"
 
         if estado == "confirmed":
+            tg_id = st.session_state.pop("pending_tg_id")
+            session_id = secrets.token_urlsafe(16)
+            habia_otra = auth.abrir_sesion(tg_id, session_id, _client_ip(), SESSION_TTL_SECONDS)
+
             st.session_state["session_expires_at"] = time.time() + SESSION_TTL_SECONDS
-            st.session_state["tg_id"] = st.session_state.pop("pending_tg_id")
+            st.session_state["tg_id"] = tg_id
+            st.session_state["session_id"] = session_id
             st.session_state.pop("login_stage", None)
             st.session_state.pop("login_token", None)
+
+            if habia_otra:
+                # Una sola sesión activa por cuenta: si había otra vigente,
+                # se reemplaza — pero que quede visible para el dueño real.
+                try:
+                    _run(_notificar_moderacion(
+                        tg_id,
+                        "🔁 <b>Se cerró tu otra sesión</b>\n"
+                        "Iniciaste sesión desde otro lugar — la sesión anterior de esta cuenta quedó cerrada."
+                    ))
+                except Exception:
+                    logger.exception("No se pudo avisar del cierre de la sesión anterior")
+
             st.rerun()
             return
 
@@ -524,6 +588,7 @@ def main() -> None:
         st.markdown("## 🔥 OLIMPO")
     with col_salir:
         if st.button("Salir"):
+            auth.cerrar_sesion(user_id)
             st.session_state.clear()
             st.rerun()
 
