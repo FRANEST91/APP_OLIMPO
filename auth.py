@@ -1,3 +1,4 @@
+import logging
 import os
 import secrets
 from datetime import datetime, timedelta, timezone
@@ -6,6 +7,8 @@ from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ParseMode
 
 from db import get_conn
+
+logger = logging.getLogger("olimpo.auth")
 
 LOGIN_TTL_SECONDS = 120
 RESEND_COOLDOWN_SECONDS = 30
@@ -234,7 +237,7 @@ async def alertar_moderacion(bot: Bot, tg_id: int, mensaje: str) -> None:
                 chat_id=chat_id, text=mensaje, parse_mode=ParseMode.HTML, reply_markup=teclado,
             )
         except Exception:
-            pass
+            logger.exception("No se pudo mandar la alerta de moderación a %s", chat_id)
 
 
 def list_admin_ids() -> list[int]:

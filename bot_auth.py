@@ -2,7 +2,6 @@ import csv
 import io
 import logging
 import os
-import re
 
 from dotenv import load_dotenv
 
@@ -192,12 +191,6 @@ async def usuario_lookup(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     await update.message.reply_html(_resumen_usuario(tg_id), reply_markup=auth.teclado_moderacion(tg_id))
 
 
-def _module_id_from_filename(nombre: str) -> str:
-    stem = nombre.rsplit(".", 1)[0].strip().lower()
-    stem = re.sub(r"[^a-z0-9_]", "_", stem)
-    return stem.strip("_")
-
-
 async def on_document(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Manda un .py al bot para agregarlo como módulo externo, o un .csv
     para importarlo a la whitelist — mismo resultado que subirlo desde el
@@ -220,20 +213,13 @@ async def on_document(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     contenido = bytes(await archivo.download_as_bytearray())
 
     if extension == "py":
-        module_id = _module_id_from_filename(nombre)
-        if not module_id:
-            await update.message.reply_text(
-                "No pude armar un ID de módulo válido a partir del nombre del "
-                "archivo — renómbralo (letras, números, guion bajo) y volvé a mandarlo."
-            )
-            return
         try:
-            sdk.registrar_externo(module_id, contenido)
+            module_id_real = sdk.registrar_externo(contenido)
         except Exception as exc:
-            logger.exception("No se pudo registrar el módulo %s desde Telegram", module_id)
+            logger.exception("No se pudo registrar el módulo desde Telegram (%s)", nombre)
             await update.message.reply_text(f"No se pudo agregar el módulo: {exc}")
         else:
-            await update.message.reply_text(f"✅ Módulo '{module_id}' agregado como externo.")
+            await update.message.reply_text(f"✅ Módulo '{module_id_real}' agregado como externo.")
         return
 
     # extension == "csv"
