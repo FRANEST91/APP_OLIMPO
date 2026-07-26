@@ -14,6 +14,7 @@ import logging
 import os
 import sqlite3
 import sys
+import types
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
@@ -503,10 +504,33 @@ def recargar(module_id: str) -> None:
     sys.modules.pop(f"olimpo_ext_{module_id}", None)
 
 
-def registrar_externo(module_id: str, contenido: bytes) -> None:
+def _validar_contenido(contenido: bytes):
+    """Ejecuta el .py en un módulo descartable, solo para validarlo y leer
+    su MODULE_ID declarado, sin tocar disco ni sys.modules todavía."""
+    mod = types.ModuleType("olimpo_ext_probe")
+    exec(compile(contenido, "<olimpo_ext_probe>", "exec"), mod.__dict__)
+    _validar(mod)
+    return mod
+
+
+def registrar_externo(contenido: bytes) -> str:
     """Guarda un archivo .py como módulo externo (vive en external_modules/,
     fuera de modules/ y sin versionar en git) y lo valida antes de dejarlo
-    registrado — si no cumple el contrato, no se guarda nada."""
+    registrado — si no cumple el contrato, no se guarda nada. Devuelve el
+    module_id con el que quedó registrado.
+
+    El nombre bajo el que se guarda SIEMPRE es el MODULE_ID que declara el
+    propio archivo — no hay parámetro para sugerir otro. Si el module_id
+    de registro pudiera ser distinto del MODULE_ID que el módulo usa
+    internamente, sdk.module_dir(MODULE_ID) llamado DESDE DENTRO del
+    módulo apuntaría a una carpeta distinta de la que administra
+    Admin > Gestión de módulos — cualquier archivo de datos subido ahí
+    quedaría invisible para el módulo, sin ningún error visible en ningún
+    lado. Forzar un único module_id de punta a punta elimina esa categoría
+    entera de bug para cualquier módulo, no solo para uno en particular."""
+    probe = _validar_contenido(contenido)
+    module_id = probe.MODULE_ID
+
     EXTERNAL_DIR.mkdir(exist_ok=True)
     path = EXTERNAL_DIR / f"{module_id}.py"
     path.write_bytes(contenido)
@@ -522,6 +546,7 @@ def registrar_externo(module_id: str, contenido: bytes) -> None:
         _on_activar(mod)
     except Exception:
         log.exception("on_activar() falló para el módulo externo %s", module_id)
+    return module_id
 
 
 def hacer_interno(module_id: str) -> None:
